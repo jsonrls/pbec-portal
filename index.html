@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PBEC — Portal Login</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+
+<body>
+  <div class="login-bg">
+    <div class="login-card">
+      <div class="login-logo">
+        <div class="login-logo-icon">🎓</div>
+        <div class="login-logo-text">
+          <h2>CATCI</h2>
+          <p>Legazpi • Ligao • Polangui</p>
+        </div>
+      </div>
+
+      <h1 class="login-title" style="font-size:22px;">Welcome back</h1>
+      <p class="login-subtitle">Sign in to the PreBoard Exam Checker Portal</p>
+
+      <form id="login-form">
+        <div class="form-group">
+          <label for="email">Teacher ID or Email</label>
+          <input class="form-control" type="text" id="email" placeholder="e.g. T2026-001 or name@email.com" required
+            autocomplete="username" />
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <div style="position:relative;">
+            <input class="form-control" type="password" id="password" placeholder="••••••••" required
+              autocomplete="current-password" style="padding-right: 44px;" />
+            <button type="button" id="toggle-pw" class="btn-ghost"
+              style="position:absolute;right:4px;top:50%;transform:translateY(-50%);padding:6px 8px;font-size:16px;">👁</button>
+          </div>
+        </div>
+
+        <div id="login-error" class="hidden" style="
+          background: var(--danger-dim);
+          border: 1px solid rgba(248,81,73,0.3);
+          border-radius: var(--radius);
+          padding: 10px 14px;
+          color: var(--danger);
+          font-size: 13px;
+          margin-bottom: 16px;
+        "></div>
+
+        <button type="submit" class="btn btn-primary btn-full btn-lg" id="login-btn">
+          <span id="login-btn-text">Sign In</span>
+          <span id="login-spinner" class="spinner hidden" style="width:16px;height:16px;"></span>
+        </button>
+      </form>
+
+      <p style="text-align:center;margin-top:24px;font-size:12px;color:var(--text-muted);">
+        PreBoard Exam Checker — Teacher & Admin Portal
+      </p>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <script type="module">
+    import { redirectIfAuth, login } from "./js/auth.js";
+    import { showToast } from "./js/ui.js";
+
+    // Redirect if already logged in
+    redirectIfAuth();
+
+    const form = document.getElementById("login-form");
+    const btnText = document.getElementById("login-btn-text");
+    const spinner = document.getElementById("login-spinner");
+    const errorBox = document.getElementById("login-error");
+    const togglePw = document.getElementById("toggle-pw");
+    const pwInput = document.getElementById("password");
+
+    togglePw.addEventListener("click", () => {
+      const isText = pwInput.type === "text";
+      pwInput.type = isText ? "password" : "text";
+      togglePw.textContent = isText ? "👁" : "🙈";
+    });
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      errorBox.classList.add("hidden");
+      errorBox.textContent = "";
+
+      const identifier = document.getElementById("email").value.trim();
+      const password = pwInput.value;
+
+      btnText.textContent = "Signing in…";
+      spinner.classList.remove("hidden");
+      form.querySelector("button[type=submit]").disabled = true;
+
+      try {
+        const role = await login(identifier, password);
+        window.location.href = `${role}/dashboard.html`;
+      } catch (err) {
+        console.error("Login error:", err);
+        let msg = "Login failed. Please try again.";
+        
+        switch (err.code) {
+          case "auth/invalid-credential":
+          case "auth/wrong-password":
+          case "auth/user-not-found":
+            msg = "Invalid credentials or Teacher ID.";
+            break;
+          case "auth/account-inactive":
+            msg = "Your account is inactive. Please wait for admin activation.";
+            break;
+          case "auth/too-many-requests":
+            msg = "Too many failed attempts. Try again later.";
+            break;
+        }
+        
+        errorBox.textContent = msg;
+        errorBox.classList.remove("hidden");
+      } finally {
+        btnText.textContent = "Sign In";
+        spinner.classList.add("hidden");
+        form.querySelector("button[type=submit]").disabled = false;
+      }
+    });
+  </script>
+</body>
+
+</html>

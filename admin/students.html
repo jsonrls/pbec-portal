@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PBEC — Students</title>
+    <link rel="stylesheet" href="../css/style.css" />
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+</head>
+
+<body>
+    <div class="app-shell">
+        <div id="sidebar-mount"></div>
+
+        <div class="main-content">
+            <header class="topbar">
+                <button class="btn btn-ghost btn-icon hamburger" id="hamburger">☰</button>
+                <div style="flex:1;">
+                    <div class="topbar-title">Students</div>
+                    <div class="topbar-subtitle">Manage enrolled students</div>
+                </div>
+                <div class="topbar-actions">
+                    <button class="btn btn-secondary" id="btn-import-students">📂 Import CSV/Excel</button>
+                    <button class="btn btn-primary" id="btn-add-student">➕ Add Student</button>
+                </div>
+            </header>
+
+            <main class="page-content">
+                <div class="toolbar">
+                    <div class="search-box">
+                        <span class="search-icon">🔍</span>
+                        <input class="form-control" type="search" id="search-input" placeholder="Search students…" />
+                    </div>
+                    <select class="form-control" id="filter-year" style="width:160px;">
+                        <option value="">All Year Levels</option>
+                        <option>1st Year</option>
+                        <option>2nd Year</option>
+                        <option>3rd Year</option>
+                        <option>4th Year</option>
+                        <option>5th Year</option>
+                    </select>
+                    <span class="text-muted text-sm" id="student-count">Loading…</span>
+                </div>
+
+                <div class="card">
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th class="sortable" data-sort="name">Name ↕</th>
+                                    <th>Student ID</th>
+                                    <th>Program</th>
+                                    <th>Year Level</th>
+                                    <th>Section</th>
+                                    <th>Added</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="students-tbody">
+                                <tr>
+                                    <td colspan="7">
+                                        <div class="empty-state">
+                                            <div class="empty-icon">👥</div>
+                                            <h4>No students yet</h4>
+                                            <p>Click "Add Student" to get started</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+    
+    <!-- Bulk Import Modal -->
+    <div class="modal-overlay hidden" id="modal-import">
+        <div class="modal">
+            <div class="modal-header">
+                <span style="font-size:20px;">📂</span>
+                <h3 id="modal-import-title">Import Students</h3>
+                <button class="modal-close" id="modal-import-close">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="drop-zone" id="import-dropzone">
+                    <div class="drop-icon">📄</div>
+                    <h4>Click to upload or drag and drop</h4>
+                    <p class="text-muted">.xlsx, .xls, or .csv (Headers: Name, Student ID, Program, Year, Section)</p>
+                    <input type="file" id="inp-import-file" accept=".xlsx, .xls, .csv" class="hidden" />
+                </div>
+                <div id="import-preview" class="hidden mt-16 text-sm"
+                    style="background:var(--bg-hover);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);">
+                    <span id="import-filename" class="fw-600"></span> (<span id="import-rowcount"></span> rows ready to import)
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="modal-import-cancel">Cancel</button>
+                <button class="btn btn-primary" id="modal-import-btn" disabled>Upload & Import</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add / Edit Student Modal -->
+    <div class="modal-overlay hidden" id="modal-student">
+        <div class="modal">
+            <div class="modal-header">
+                <span style="font-size:20px;" id="modal-icon">👤</span>
+                <h3 id="modal-title">Add Student</h3>
+                <button class="modal-close" id="modal-close">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="student-form">
+                    <input type="hidden" id="student-id-hidden" value="" />
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                        <div class="form-group" style="grid-column:1/-1;">
+                            <label>Full Name *</label>
+                            <input class="form-control" id="inp-name" placeholder="Juan Dela Cruz" required />
+                        </div>
+                        <div class="form-group">
+                            <label>Student ID *</label>
+                            <input class="form-control" id="inp-sid" placeholder="2024-00001" required />
+                        </div>
+                        <div class="form-group">
+                            <label>Program</label>
+                            <select class="form-control" id="inp-program">
+                                <option>Bachelor of Science in Electrical Engineering</option>
+                                <option>BSEE</option>
+                                <option>Other</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Year Level</label>
+                            <select class="form-control" id="inp-year">
+                                <option>1st Year</option>
+                                <option>2nd Year</option>
+                                <option>3rd Year</option>
+                                <option>4th Year</option>
+                                <option>5th Year</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Section</label>
+                            <input class="form-control" id="inp-section" placeholder="e.g. EE-4A" />
+                        </div>
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input class="form-control" type="email" id="inp-email"
+                                placeholder="student@catci.edu.ph" />
+                        </div>
+                        <div class="form-group" style="grid-column:1/-1;">
+                            <label>Notes</label>
+                            <textarea class="form-control" id="inp-notes" rows="2" placeholder="Optional notes…"
+                                style="resize:vertical;"></textarea>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="modal-cancel">Cancel</button>
+                <button class="btn btn-primary" id="modal-save">Save Student</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <script type="module">
+        import { requireAuth, logout } from "../js/auth.js";
+        import { renderSidebar } from "../js/sidebar.js";
+        import { initSidebar, showToast, showConfirm, setButtonLoading, formatDate, debounce } from "../js/ui.js";
+        import { logActivity } from "../js/audit.js";
+        import { lucideIcon } from "../js/lucide-icons.js";
+        import { db } from "../js/firebase-config.js";
+        import {
+            collection, addDoc, getDocs, updateDoc, deleteDoc,
+            doc, serverTimestamp, query, orderBy, onSnapshot, writeBatch
+        } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+        const user = await requireAuth("admin");
+        document.getElementById("sidebar-mount").innerHTML = renderSidebar("students", user);
+        document.getElementById("user-email-display").textContent = user.name || user.email;
+        document.getElementById("user-avatar").textContent = (user.name || user.email)[0].toUpperCase();
+        document.getElementById("logout-btn").addEventListener("click", logout);
+        initSidebar();
+
+        let allStudents = [];
+        let editingId = null;
+
+        // ─── Real-time listener ───────────────────────────────────────
+        const q = query(collection(db, "students"), orderBy("createdAt", "desc"));
+        onSnapshot(q, (snap) => {
+            allStudents = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+            renderTable(allStudents);
+        });
+
+        function renderTable(students) {
+            const searchVal = document.getElementById("search-input").value.toLowerCase();
+            const yearVal = document.getElementById("filter-year").value;
+            const filtered = students.filter(s => {
+                const matchSearch = !searchVal || s.name?.toLowerCase().includes(searchVal) || s.studentId?.toLowerCase().includes(searchVal);
+                const matchYear = !yearVal || s.yearLevel === yearVal;
+                return matchSearch && matchYear;
+            });
+
+            document.getElementById("student-count").textContent = `${filtered.length} student${filtered.length !== 1 ? "s" : ""}`;
+            const tbody = document.getElementById("students-tbody");
+
+            if (!filtered.length) {
+                tbody.innerHTML = `<tr><td colspan="7">
+        <div class="empty-state">
+          <div class="empty-icon">🔍</div>
+          <h4>No results found</h4>
+          <p>Try a different search or filter</p>
+        </div>
+      </td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(s => `
+      <tr>
+        <td>
+          <div class="flex gap-8" style="align-items:center;">
+            <div style="width:32px;height:32px;border-radius:50%;background:var(--accent-dim);color:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0;">
+              ${(s.name || "?")[0].toUpperCase()}
+            </div>
+            <div>
+              <div class="fw-600">${s.name || "—"}</div>
+              ${s.email ? `<div class="text-xs text-muted">${s.email}</div>` : ""}
+            </div>
+          </div>
+        </td>
+        <td><span class="badge badge-gray">${s.studentId || "—"}</span></td>
+        <td class="text-sm">${s.program ? s.program.replace("Bachelor of Science in ", "BS ") : "—"}</td>
+        <td><span class="badge badge-teal">${s.yearLevel || "—"}</span></td>
+        <td>${s.section || "—"}</td>
+        <td class="text-muted text-sm">${formatDate(s.createdAt)}</td>
+        <td>
+          <div class="td-actions">
+            <button class="btn btn-ghost btn-icon btn-sm" onclick="editStudent('${s._id}')" title="Edit" aria-label="Edit">${lucideIcon("pencil")}</button>
+            <button class="btn btn-danger btn-icon btn-sm" onclick="deleteStudent('${s._id}', '${(s.name || "this student").replace(/'/g, "\\'")}')" title="Delete" aria-label="Delete">${lucideIcon("trash-2")}</button>
+          </div>
+        </td>
+      </tr>
+    `).join("");
+        }
+
+        // Search & filter
+        const doFilter = debounce(() => renderTable(allStudents), 250);
+        document.getElementById("search-input").addEventListener("input", doFilter);
+        document.getElementById("filter-year").addEventListener("change", doFilter);
+
+        // ─── Modal helpers ─────────────────────────────────────────────
+        function openModal(student = null) {
+            editingId = student ? student._id : null;
+            document.getElementById("modal-title").textContent = student ? "Edit Student" : "Add Student";
+            document.getElementById("modal-icon").textContent = student ? "✏️" : "👤";
+            document.getElementById("student-id-hidden").value = student?._id || "";
+            document.getElementById("inp-name").value = student?.name || "";
+            document.getElementById("inp-sid").value = student?.studentId || "";
+            document.getElementById("inp-program").value = student?.program || "Bachelor of Science in Electrical Engineering";
+            document.getElementById("inp-year").value = student?.yearLevel || "1st Year";
+            document.getElementById("inp-section").value = student?.section || "";
+            document.getElementById("inp-email").value = student?.email || "";
+            document.getElementById("inp-notes").value = student?.notes || "";
+            document.getElementById("modal-student").classList.remove("hidden");
+            document.getElementById("inp-name").focus();
+        }
+
+        function closeModal() {
+            document.getElementById("modal-student").classList.add("hidden");
+            editingId = null;
+        }
+
+        document.getElementById("btn-add-student").addEventListener("click", () => openModal());
+        document.getElementById("modal-close").addEventListener("click", closeModal);
+        document.getElementById("modal-cancel").addEventListener("click", closeModal);
+        document.getElementById("modal-student").addEventListener("click", (e) => {
+            if (e.target === document.getElementById("modal-student")) closeModal();
+        });
+
+        // ─── Save student ──────────────────────────────────────────────
+        document.getElementById("modal-save").addEventListener("click", async () => {
+            const name = document.getElementById("inp-name").value.trim();
+            const sid = document.getElementById("inp-sid").value.trim();
+            const program = document.getElementById("inp-program").value;
+            const year = document.getElementById("inp-year").value;
+            const section = document.getElementById("inp-section").value.trim();
+            const email = document.getElementById("inp-email").value.trim();
+            const notes = document.getElementById("inp-notes").value.trim();
+
+            if (!name || !sid) { showToast("Name and Student ID are required.", "error"); return; }
+
+            const btn = document.getElementById("modal-save");
+            setButtonLoading(btn, true, "Saving…");
+            try {
+                const data = { name, studentId: sid, program, yearLevel: year, section, email, notes, updatedAt: serverTimestamp() };
+                if (editingId) {
+                    await updateDoc(doc(db, "students", editingId), data);
+                    await logActivity(user, "UPDATE_STUDENT", `Updated student: ${data.name}`, { studentId: data.studentId, id: editingId });
+                    showToast("Student updated successfully.", "success");
+                } else {
+                    data.createdAt = serverTimestamp();
+                    await addDoc(collection(db, "students"), data);
+                    await logActivity(user, "ADD_STUDENT", `Added student: ${data.name}`, { studentId: data.studentId });
+                    showToast("Student added successfully.", "success");
+                }
+                closeModal();
+            } catch (err) {
+                showToast("Error saving student: " + err.message, "error");
+            } finally {
+                setButtonLoading(btn, false);
+            }
+        });
+
+        // ─── Edit & Delete (exposed globally) ─────────────────────────
+        window.editStudent = (id) => {
+            const s = allStudents.find(x => x._id === id);
+            if (s) openModal(s);
+        };
+
+        window.deleteStudent = async (id, name) => {
+            const ok = await showConfirm(`Delete <strong>${name}</strong>? This cannot be undone.`, "Delete Student");
+            if (!ok) return;
+            try {
+                await deleteDoc(doc(db, "students", id));
+                await logActivity(user, "DELETE_STUDENT", `Deleted student: ${name}`, { id });
+                showToast("Student deleted.", "success");
+            } catch (err) {
+                showToast("Error deleting student: " + err.message, "error");
+            }
+        };
+
+        // ─── Bulk Import ──────────────────────────────────────────────
+        const dropzone = document.getElementById("import-dropzone");
+        const fileInput = document.getElementById("inp-import-file");
+        let importData = null;
+
+        function openImportModal() {
+            document.getElementById("modal-import").classList.remove("hidden");
+            resetImport();
+        }
+
+        function closeImportModal() {
+            document.getElementById("modal-import").classList.add("hidden");
+            resetImport();
+        }
+
+        function resetImport() {
+            fileInput.value = "";
+            importData = null;
+            document.getElementById("import-preview").classList.add("hidden");
+            document.getElementById("import-filename").textContent = "";
+            document.getElementById("import-rowcount").textContent = "";
+            document.getElementById("modal-import-btn").disabled = true;
+        }
+
+        document.getElementById("btn-import-students").addEventListener("click", openImportModal);
+        document.getElementById("modal-import-close").addEventListener("click", closeImportModal);
+        document.getElementById("modal-import-cancel").addEventListener("click", closeImportModal);
+        document.getElementById("modal-import").addEventListener("click", (e) => {
+            if (e.target === document.getElementById("modal-import")) closeImportModal();
+        });
+
+        dropzone.addEventListener("click", () => fileInput.click());
+        dropzone.addEventListener("dragover", (e) => { e.preventDefault(); dropzone.classList.add("dragover"); });
+        dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
+        dropzone.addEventListener("drop", (e) => {
+            e.preventDefault();
+            dropzone.classList.remove("dragover");
+            if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+        });
+        fileInput.addEventListener("change", (e) => {
+            if (e.target.files.length) handleFile(e.target.files[0]);
+        });
+
+        function handleFile(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                    if (json.length < 2) throw new Error("File is empty or missing headers.");
+
+                    const headers = json[0].map(h => String(h).toLowerCase().trim());
+                    const rows = json.slice(1).filter(row => row.length > 0 && row.some(cell => cell));
+
+                    if (rows.length === 0) throw new Error("No data rows found.");
+
+                    const nameIdx = headers.findIndex(h => h.includes("name"));
+                    const idIdx = headers.findIndex(h => h.includes("id"));
+                    const progIdx = headers.findIndex(h => h.includes("program") || h.includes("course"));
+                    const yearIdx = headers.findIndex(h => h.includes("year"));
+                    const sectionIdx = headers.findIndex(h => h.includes("sect"));
+
+                    if (nameIdx === -1 || idIdx === -1) {
+                        throw new Error("Missing required columns. Must have 'Name' and 'Student ID' columns.");
+                    }
+
+                    importData = rows.map(row => ({
+                        name: String(row[nameIdx] || "").trim(),
+                        studentId: String(row[idIdx] || "").trim(),
+                        program: progIdx !== -1 ? String(row[progIdx] || "").trim() : "Bachelor of Science in Electrical Engineering",
+                        yearLevel: yearIdx !== -1 ? String(row[yearIdx] || "").trim() : "1st Year",
+                        section: sectionIdx !== -1 ? String(row[sectionIdx] || "").trim() : "",
+                        createdAt: serverTimestamp(),
+                        updatedAt: serverTimestamp()
+                    })).filter(r => r.name && r.studentId);
+
+                    document.getElementById("import-preview").classList.remove("hidden");
+                    document.getElementById("import-filename").textContent = file.name;
+                    document.getElementById("import-rowcount").textContent = importData.length;
+                    document.getElementById("modal-import-btn").disabled = importData.length === 0;
+
+                } catch (err) {
+                    showToast(err.message || "Failed to parse file.", "error");
+                    resetImport();
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        document.getElementById("modal-import-btn").addEventListener("click", async () => {
+            if (!importData || importData.length === 0) return;
+
+            const btn = document.getElementById("modal-import-btn");
+            setButtonLoading(btn, true, `Importing ${importData.length} records…`);
+
+            try {
+                const chunks = [];
+                for (let i = 0; i < importData.length; i += 500) {
+                    chunks.push(importData.slice(i, i + 500));
+                }
+
+                for (const chunk of chunks) {
+                    const batch = writeBatch(db);
+                    for (const student of chunk) {
+                        const newRef = doc(collection(db, "students"));
+                        batch.set(newRef, student);
+                    }
+                    await batch.commit();
+                }
+
+                await logActivity(user, "IMPORT_STUDENTS", `Imported ${importData.length} students via file`, { count: importData.length });
+
+                showToast(`Successfully imported ${importData.length} students!`, "success");
+                closeImportModal();
+            } catch (err) {
+                console.error(err);
+                showToast("Import failed: " + err.message, "error");
+            } finally {
+                setButtonLoading(btn, false);
+            }
+        });
+    </script>
+</body>
+
+</html>

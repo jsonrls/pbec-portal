@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PBEC — System Settings</title>
+    <link rel="stylesheet" href="../css/style.css" />
+</head>
+
+<body>
+    <div class="app-shell">
+        <div id="sidebar-mount"></div>
+
+        <div class="main-content">
+            <header class="topbar">
+                <button class="btn btn-ghost btn-icon hamburger" id="hamburger">☰</button>
+                <div style="flex:1;">
+                    <div class="topbar-title">System Settings</div>
+                    <div class="topbar-subtitle">Configure admin-owned portal identity and support details</div>
+                </div>
+            </header>
+
+            <main class="page-content">
+                <div class="dashboard-band">
+                    <section class="card">
+                        <div class="card-header">
+                            <h3>Admin Console Settings</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label>Portal Name</label>
+                                <input class="form-control" id="portal-name" placeholder="PBEC Command" />
+                            </div>
+                            <div class="form-group">
+                                <label>Admin Contact Email</label>
+                                <input class="form-control" id="admin-contact-email" type="email" placeholder="admin@catci.edu.ph" />
+                            </div>
+                            <div class="form-group">
+                                <label>Admin Notice</label>
+                                <textarea class="form-control" id="admin-notice" rows="4" placeholder="Internal note for administrators..."></textarea>
+                            </div>
+                        </div>
+                        <div class="card-footer">
+                            <button class="btn btn-primary" id="btn-save">Save Settings</button>
+                        </div>
+                    </section>
+
+                    <aside class="card priority-panel">
+                        <h3>Admin Scope</h3>
+                        <div class="priority-list">
+                            <div class="priority-item"><span class="priority-marker"></span><span>Teacher account lifecycle and access</span></div>
+                            <div class="priority-item"><span class="priority-marker"></span><span>Portal identity and support ownership</span></div>
+                            <div class="priority-item"><span class="priority-marker"></span><span>Audit trail review and data governance</span></div>
+                        </div>
+                    </aside>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <script type="module">
+        import { requireAuth, logout } from "../js/auth.js";
+        import { renderSidebar } from "../js/sidebar.js";
+        import { initSidebar, showToast, setButtonLoading } from "../js/ui.js";
+        import { getSettings, updateSettings } from "../js/settings.js";
+        import { logActivity } from "../js/audit.js";
+
+        const user = await requireAuth("admin");
+        document.getElementById("sidebar-mount").innerHTML = renderSidebar("settings", user);
+        document.getElementById("user-email-display").textContent = user.name || user.email;
+        document.getElementById("user-avatar").textContent = (user.name || user.email)[0].toUpperCase();
+        document.getElementById("logout-btn").addEventListener("click", logout);
+        initSidebar();
+
+        async function loadSettings() {
+            const settings = await getSettings();
+            document.getElementById("portal-name").value = settings.portalName || settings.institutionName || "PBEC Command";
+            document.getElementById("admin-contact-email").value = settings.adminContactEmail || user.email || "";
+            document.getElementById("admin-notice").value = settings.adminNotice || "";
+        }
+
+        document.getElementById("btn-save").addEventListener("click", async () => {
+            const btn = document.getElementById("btn-save");
+            const adminContactEmail = document.getElementById("admin-contact-email").value.trim();
+            if (adminContactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminContactEmail)) {
+                showToast("Enter a valid admin contact email.", "error");
+                return;
+            }
+
+            const settings = {
+                portalName: document.getElementById("portal-name").value.trim() || "PBEC Command",
+                adminContactEmail,
+                adminNotice: document.getElementById("admin-notice").value.trim()
+            };
+
+            try {
+                setButtonLoading(btn, true, "Saving...");
+                await updateSettings(settings);
+                await logActivity(user, "UPDATE_SETTINGS", "Updated system settings", settings);
+                showToast("Settings saved.", "success");
+            } catch (err) {
+                showToast("Failed to save settings: " + err.message, "error");
+            } finally {
+                setButtonLoading(btn, false);
+            }
+        });
+
+        loadSettings();
+    </script>
+</body>
+
+</html>

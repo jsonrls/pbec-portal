@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PBEC — Exams</title>
+    <link rel="stylesheet" href="../css/style.css" />
+</head>
+
+<body>
+    <div class="app-shell">
+        <div id="sidebar-mount"></div>
+
+        <div class="main-content">
+            <header class="topbar">
+                <button class="btn btn-ghost btn-icon hamburger" id="hamburger" aria-label="Toggle navigation">
+                    <span data-lucide-icon="menu"></span>
+                </button>
+                <div style="flex:1;">
+                    <div class="topbar-title">Exams</div>
+                    <div class="topbar-subtitle">Generate and manage exams</div>
+                </div>
+                <div class="topbar-actions">
+                    <button class="btn btn-primary" id="btn-generate">
+                        <span data-lucide-icon="sparkles"></span>
+                        Generate Exam
+                    </button>
+                </div>
+            </header>
+
+            <main class="page-content">
+                <!-- Subject filter chips -->
+                <div class="chip-group mb-16">
+                    <div class="chip active" data-subject="all">All Subjects</div>
+                    <div class="chip" data-subject="Mathematics">Mathematics</div>
+                    <div class="chip" data-subject="ESAS">ESAS</div>
+                    <div class="chip" data-subject="Professional EE">Professional EE</div>
+                </div>
+
+                <div id="exams-container">
+                    <div class="empty-state" id="exams-empty">
+                        <div class="empty-icon" data-lucide-icon="file-text"></div>
+                        <h4>No exams yet</h4>
+                        <p>Click "Generate Exam" to create your first exam</p>
+                        <button class="btn btn-primary" id="btn-generate2">
+                            <span data-lucide-icon="sparkles"></span>
+                            Generate Exam
+                        </button>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Generate Exam Modal -->
+    <div class="modal-overlay hidden" id="modal-generate">
+        <div class="modal modal-lg">
+            <div class="modal-header">
+                <span data-lucide-icon="sparkles"></span>
+                <h3>Generate New Exam</h3>
+                <button class="modal-close" id="gen-close" aria-label="Close">
+                    <span data-lucide-icon="x"></span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                    <div class="form-group">
+                        <label>Exam Name</label>
+                        <input class="form-control" id="gen-name" placeholder="e.g. Midterm Exam 2024" />
+                    </div>
+                    <div class="form-group">
+                        <label>Subject *</label>
+                        <select class="form-control" id="gen-subject">
+                            <option value="Mathematics">Mathematics</option>
+                            <option value="ESAS">ESAS</option>
+                            <option value="Professional EE">Professional EE</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Number of Questions</label>
+                        <select class="form-control" id="gen-count">
+                            <option value="50">50 questions</option>
+                            <option value="100" selected>100 questions (Blueprint)</option>
+                            <option value="75">75 questions</option>
+                            <option value="25">25 questions</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Shuffle</label>
+                        <select class="form-control" id="gen-shuffle">
+                            <option value="yes">Yes — randomize question order</option>
+                            <option value="no">No — keep original order</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Select Question Bank Sessions *</label>
+                    <div id="session-checkboxes" style="
+          max-height:220px;overflow-y:auto;border:1px solid var(--border-strong);
+          border-radius:var(--radius);padding:12px;background:rgba(255,255,255,0.02);
+        ">
+                        <div class="empty-state" style="padding:20px 0;" id="sessions-loading">
+                            <div class="spinner"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>Blueprint Info</label>
+                    <div
+                        style="padding:12px;background:var(--info-dim);border:1px solid rgba(88,166,255,0.3);border-radius:var(--radius);font-size:12px;color:var(--info);">
+                        When generating 100-question exams, the system follows the official PH EE Preboard blueprint,
+                        distributing questions by topic and category (Objective/Computation).
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="gen-cancel">Cancel</button>
+                <button class="btn btn-primary" id="gen-submit" disabled>Generate Exam</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- View Exam Modal -->
+    <div class="modal-overlay hidden" id="modal-view">
+        <div class="modal modal-xl">
+            <div class="modal-header">
+                <span data-lucide-icon="clipboard"></span>
+                <h3 id="view-exam-title">Exam Details</h3>
+                <button class="modal-close" id="view-close" aria-label="Close">
+                    <span data-lucide-icon="x"></span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="view-sets-container">
+                    <!-- Questions rendered here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rename Modal -->
+    <div class="modal-overlay hidden" id="modal-rename">
+        <div class="modal" style="max-width:400px;">
+            <div class="modal-header">
+                <span data-lucide-icon="pencil"></span>
+                <h3>Rename Exam</h3>
+                <button class="modal-close" id="rename-close" aria-label="Close">
+                    <span data-lucide-icon="x"></span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>New Exam Name</label>
+                    <input class="form-control" id="rename-input" placeholder="Enter new name" />
+                    <input type="hidden" id="rename-id" />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="rename-cancel">Cancel</button>
+                <button class="btn btn-primary" id="rename-save">Rename</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <script type="module">
+        import { requireAuth, logout } from "../js/auth.js";
+        import { renderSidebar } from "../js/sidebar.js";
+        import { initSidebar, showToast, showConfirm, setButtonLoading, formatDateTime } from "../js/ui.js";
+        import { logActivity } from "../js/audit.js";
+        import { lucideIcon } from "../js/lucide-icons.js";
+        import { db } from "../js/firebase-config.js";
+        import {
+            collection, addDoc, getDocs, deleteDoc, doc,
+            serverTimestamp, query, orderBy, onSnapshot, updateDoc, where, collectionGroup
+        } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+        const user = await requireAuth("admin");
+        document.getElementById("sidebar-mount").innerHTML = renderSidebar("exams", user);
+        document.querySelectorAll("[data-lucide-icon]").forEach((node) => {
+            node.innerHTML = lucideIcon(node.dataset.lucideIcon);
+        });
+        document.getElementById("user-email-display").textContent = user.name || user.email;
+        document.getElementById("user-avatar").textContent = (user.name || user.email)[0].toUpperCase();
+        document.getElementById("logout-btn").addEventListener("click", logout);
+        initSidebar();
+
+        let allExams = [];
+        let activeSubject = "all";
+
+        // ─── Real-time exam list ───────────────────────────────────────
+        const qExams = collection(db, "exams");
+        onSnapshot(qExams, (snap) => {
+            // Sort client-side to handle mixed types (Numbers vs Timestamps) and avoid index issues
+            allExams = snap.docs.map(d => ({ ...d.data(), docId: d.id }))
+                .sort((a, b) => {
+                    const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.createdAt || 0);
+                    const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.createdAt || 0);
+                    return timeB - timeA;
+                });
+            renderExams();
+        });
+
+        function getExamSubject(e) {
+            if (e.subject) return e.subject;
+            const name = (e.examName || "").toLowerCase();
+            if (name.includes("math")) return "Mathematics";
+            if (name.includes("esas")) return "ESAS";
+            if (name.includes("prof") || name.includes("ee")) return "Professional EE";
+            return "Other";
+        }
+
+        function renderExams() {
+            const container = document.getElementById("exams-container");
+            const empty = document.getElementById("exams-empty");
+
+            console.log("Rendering exams. Total:", allExams.length);
+
+            const filtered = allExams.filter(e => {
+                if (activeSubject === "all") return true;
+                return getExamSubject(e) === activeSubject;
+            });
+
+            if (!filtered.length) {
+                container.innerHTML = "";
+                container.appendChild(empty);
+                empty.classList.remove("hidden");
+                return;
+            }
+            empty.classList.add("hidden");
+
+            console.log("All Exams Data:", allExams.map(e => ({ name: e.examName, docId: e._id, numericId: e.id })));
+
+            container.innerHTML = `
+      <div class="card">
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Exam Name</th>
+                <th>Subject</th>
+                <th>Questions</th>
+                <th>Created</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filtered.map(e => {
+                if (!e) return "";
+                const subject = getExamSubject(e);
+                const qCount = e.generatedQuestionCount || e.questionCount || (e.questionIds || e.setAQuestionIds || []).length;
+                const finalId = e.docId || e.id;
+                
+                return `
+                <tr>
+                  <td class="fw-600">${e.examName || "Unnamed"}</td>
+                  <td><span class="badge badge-teal">${subject}</span></td>
+                  <td><span class="badge badge-blue">${qCount} Qs</span></td>
+                  <td class="text-muted text-sm">${formatDateTime(e.createdAt)}</td>
+                  <td>
+                    <div class="td-actions">
+                      ${finalId ? `<a href="view-exam?id=${finalId}" class="btn btn-secondary btn-sm" data-id="${finalId}">${lucideIcon("eye")} View</a>` : `<span class="text-xs text-muted">No ID</span>`}
+                      <button class="btn btn-ghost btn-sm btn-icon" onclick="openRename('${finalId}', '${(e.examName || "").replace(/'/g, "\\'")}')" title="Rename Exam" aria-label="Rename Exam">${lucideIcon("pencil")}</button>
+                      <button class="btn btn-danger btn-icon btn-sm" onclick="deleteExam('${finalId}', '${(e.examName || "Exam").replace(/'/g, "\\'")}')" title="Delete Exam" aria-label="Delete Exam">${lucideIcon("trash-2")}</button>
+                    </div>
+                  </td>
+                </tr>
+              `}).join("")}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+        }
+
+        document.querySelectorAll(".chip[data-subject]").forEach(chip => {
+            chip.addEventListener("click", () => {
+                document.querySelectorAll(".chip[data-subject]").forEach(c => c.classList.remove("active"));
+                chip.classList.add("active");
+                activeSubject = chip.dataset.subject;
+                renderExams();
+            });
+        });
+
+        // ─── Generate Exam Modal ───────────────────────────────────────
+        const openGenModal = async () => {
+            document.getElementById("modal-generate").classList.remove("hidden");
+            document.getElementById("gen-submit").disabled = true;
+
+            // Load available sessions for selected subject
+            await loadSessionCheckboxes();
+        };
+
+        document.getElementById("btn-generate").addEventListener("click", openGenModal);
+        document.getElementById("btn-generate2")?.addEventListener("click", openGenModal);
+        document.getElementById("gen-close").addEventListener("click", () => document.getElementById("modal-generate").classList.add("hidden"));
+        document.getElementById("gen-cancel").addEventListener("click", () => document.getElementById("modal-generate").classList.add("hidden"));
+        document.getElementById("gen-subject").addEventListener("change", loadSessionCheckboxes);
+
+        async function loadSessionCheckboxes() {
+            const subject = document.getElementById("gen-subject").value;
+            const container = document.getElementById("session-checkboxes");
+            container.innerHTML = `<div class="flex-center" style="padding:16px;"><div class="spinner"></div></div>`;
+
+            // Optimized: Fetch session metadata instead of all questions
+            const snap = await getDocs(query(collection(db, "question_banks"), where("subject", "==", subject)));
+            const sessions = {};
+            snap.forEach(d => {
+                const data = d.data();
+                sessions[d.id] = { name: data.sessionName || data.displayName || data.sourceFileName || "Unnamed Session", count: data.questionCount || 0 };
+            });
+
+            const keys = Object.keys(sessions);
+            if (!keys.length) {
+                container.innerHTML = `<div class="empty-state" style="padding:20px 0;"><p>No question banks found for ${subject}.</p></div>`;
+                document.getElementById("gen-submit").disabled = true;
+                return;
+            }
+
+            container.innerHTML = keys.map(k => `
+      <label style="display:flex;align-items:center;gap:10px;padding:8px 4px;cursor:pointer;border-radius:var(--radius-sm);transition:background .15s;" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background=''">
+        <input type="checkbox" class="session-cb" value="${k}" style="width:16px;height:16px;accent-color:var(--accent);" />
+        <div>
+          <div class="fw-600" style="font-size:13px;">${sessions[k].name}</div>
+          <div class="text-xs text-muted">${sessions[k].count} questions</div>
+        </div>
+      </label>
+    `).join("");
+
+            container.querySelectorAll(".session-cb").forEach(cb => {
+                cb.addEventListener("change", () => {
+                    const any = [...container.querySelectorAll(".session-cb")].some(c => c.checked);
+                    document.getElementById("gen-submit").disabled = !any;
+                });
+            });
+        }
+
+        document.getElementById("gen-submit").addEventListener("click", async () => {
+            const subject = document.getElementById("gen-subject").value;
+            const name = document.getElementById("gen-name").value.trim() || `Exam (${subject}) – ${new Date().toLocaleDateString("en-PH")}`;
+            const count = parseInt(document.getElementById("gen-count").value);
+            const shuffle = document.getElementById("gen-shuffle").value === "yes";
+            const sessionIds = [...document.querySelectorAll(".session-cb:checked")].map(c => c.value);
+
+            const btn = document.getElementById("gen-submit");
+            setButtonLoading(btn, true, "Generating…");
+
+            try {
+                // Optimized: Fetch questions ONLY from selected sessions
+                let pool = [];
+                for (const sid of sessionIds) {
+                    const qSnap = await getDocs(collection(db, "question_banks", sid, "questions"));
+                    pool.push(...qSnap.docs.map(d => ({ _id: d.id, ...d.data() })));
+                }
+
+                if (!pool.length) throw new Error("No questions found in selected sessions.");
+
+                const shuffled = shuffle ? [...pool].sort(() => Math.random() - 0.5) : pool;
+                const setA = shuffled.slice(0, Math.min(count, shuffled.length));
+                const setB = [...setA].sort(() => Math.random() - 0.5);
+
+                const docRef = await addDoc(collection(db, "exams"), {
+                    examName: name, subject,
+                    setAQuestionIds: setA.map(q => q._id),
+                    setBQuestionIds: setB.map(q => q._id),
+                    sessionIds: sessionIds, // Track sessions for easier viewing later
+                    createdAt: serverTimestamp(),
+                    createdBy: user.email,
+                    questionCount: setA.length
+                });
+
+                await logActivity(user, "GENERATE_EXAM", `Generated exam: ${name}`, { id: docRef.id, subject, examName: name });
+
+                showToast(`Exam "${name}" generated with ${setA.length} questions!`, "success");
+                document.getElementById("modal-generate").classList.add("hidden");
+            } catch (err) {
+                showToast("Error generating exam: " + err.message, "error");
+            } finally {
+                setButtonLoading(btn, false);
+            }
+        });
+
+        // ─── View Exam ─────────────────────────────────────────────────
+        window.viewExam = async (id) => {
+            const exam = allExams.find(e => e._id === id);
+            if (!exam) return;
+            document.getElementById("view-exam-title").textContent = exam.examName || "Exam Details";
+            const container = document.getElementById("view-sets-container");
+            container.innerHTML = `<div class="flex-center" style="grid-column:1/-1;padding:40px;"><div class="spinner"></div></div>`;
+            document.getElementById("modal-view").classList.remove("hidden");
+
+            // Fetch questions from Firestore by ID (collectionGroup to get all)
+            const allQSnap = await getDocs(collectionGroup(db, "questions"));
+            const qMap = {};
+            allQSnap.forEach(d => { qMap[d.id] = d.data(); });
+
+            const renderSet = (ids, label) => {
+                const rows = ids.slice(0, 20).map((qid, i) => {
+                    const q = qMap[qid];
+                    if (!q) return `<tr><td>${i + 1}</td><td class="text-muted">Question not found</td><td>—</td><td>—</td></tr>`;
+                    return `
+          <tr>
+            <td class="text-muted">${i + 1}</td>
+            <td class="text-sm" style="max-width:240px;white-space:normal;">${q.questionText || "—"}</td>
+            <td class="text-xs text-muted truncate">${q.topic || "—"}</td>
+            <td class="fw-600 text-accent">${q.correctAnswer || "—"}</td>
+          </tr>`;
+                }).join("");
+                const more = ids.length > 20 ? `<tr><td colspan="4" class="text-center text-muted text-sm" style="padding:10px;">…and ${ids.length - 20} more</td></tr>` : "";
+                return `
+        <div>
+          <h4 style="margin-bottom:12px;">${label} <span class="badge badge-blue">${ids.length} Qs</span></h4>
+          <div class="table-wrapper" style="max-height:400px;overflow-y:auto;">
+            <table>
+              <thead><tr><th>#</th><th>Question</th><th>Topic</th><th>Ans</th></tr></thead>
+              <tbody>${rows}${more}</tbody>
+            </table>
+          </div>
+        </div>`;
+            };
+
+            container.innerHTML = renderSet(exam.setAQuestionIds || [], "Questions");
+        };
+
+        document.getElementById("view-close").addEventListener("click", () => document.getElementById("modal-view").classList.add("hidden"));
+
+        // ─── Rename ────────────────────────────────────────────────────
+        window.openRename = (id, name) => {
+            document.getElementById("rename-id").value = id;
+            document.getElementById("rename-input").value = name;
+            document.getElementById("modal-rename").classList.remove("hidden");
+        };
+        document.getElementById("rename-close").addEventListener("click", () => document.getElementById("modal-rename").classList.add("hidden"));
+        document.getElementById("rename-cancel").addEventListener("click", () => document.getElementById("modal-rename").classList.add("hidden"));
+        document.getElementById("rename-save").addEventListener("click", async () => {
+            const id = document.getElementById("rename-id").value;
+            const name = document.getElementById("rename-input").value.trim();
+            if (!name) { showToast("Name cannot be empty.", "error"); return; }
+            const btn = document.getElementById("rename-save");
+            setButtonLoading(btn, true, "Saving…");
+            try {
+                await updateDoc(doc(db, "exams", id), { examName: name, updatedAt: serverTimestamp() });
+                await logActivity(user, "RENAME_EXAM", `Renamed exam to: ${name}`, { id, newName: name });
+                showToast("Exam renamed.", "success");
+                document.getElementById("modal-rename").classList.add("hidden");
+            } catch (err) {
+                showToast("Error: " + err.message, "error");
+            } finally {
+                setButtonLoading(btn, false);
+            }
+        });
+
+        // ─── Delete ────────────────────────────────────────────────────
+        window.deleteExam = async (id, name) => {
+            const ok = await showConfirm(`Delete exam "<strong>${name}</strong>"? This cannot be undone.`, "Delete Exam");
+            if (!ok) return;
+            try {
+                await deleteDoc(doc(db, "exams", id));
+                await logActivity(user, "DELETE_EXAM", `Deleted exam: ${name}`, { id });
+                showToast("Exam deleted.", "success");
+            } catch (err) {
+                showToast("Error: " + err.message, "error");
+            }
+        };
+    </script>
+</body>
+
+</html>

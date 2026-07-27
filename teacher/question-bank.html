@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PBEC — Question Bank</title>
+    <link rel="stylesheet" href="../css/style.css" />
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+</head>
+
+<body>
+    <div class="app-shell">
+        <div id="sidebar-mount"></div>
+
+        <div class="main-content">
+            <header class="topbar">
+                <button class="btn btn-ghost btn-icon hamburger" id="hamburger">☰</button>
+                <div style="flex:1;">
+                    <div class="topbar-title">Question Bank</div>
+                    <div class="topbar-subtitle">Upload and manage exam questions</div>
+                </div>
+                <div class="topbar-actions">
+                    <button class="btn btn-secondary" id="btn-download-template">⬇ Template</button>
+                    <button class="btn btn-secondary" id="btn-export">📤 Export Excel</button>
+                    <button class="btn btn-primary" id="btn-upload">📁 Upload CSV/Excel</button>
+                    <input type="file" id="file-input" accept=".csv,.xlsx,.xls" class="hidden" />
+                </div>
+            </header>
+
+            <main class="page-content">
+                <!-- Stats bar -->
+                <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:24px;" id="qb-stats">
+                    <div class="stat-card">
+                        <div class="stat-icon teal">📚</div>
+                        <div class="stat-info">
+                            <div class="stat-value" id="qs-total">—</div>
+                            <div class="stat-label">Total Questions</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon blue">🔢</div>
+                        <div class="stat-info">
+                            <div class="stat-value" id="qs-math">—</div>
+                            <div class="stat-label">Mathematics</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon yellow">⚗️</div>
+                        <div class="stat-info">
+                            <div class="stat-value" id="qs-esas">—</div>
+                            <div class="stat-label">ESAS</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon green">⚡</div>
+                        <div class="stat-info">
+                            <div class="stat-value" id="qs-prof">—</div>
+                            <div class="stat-label">Professional EE</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Subject Tabs -->
+                <div class="chip-group mb-16">
+                    <div class="chip active" data-subject="all">All Subjects</div>
+                    <div class="chip" data-subject="Mathematics">Mathematics</div>
+                    <div class="chip" data-subject="ESAS">ESAS</div>
+                    <div class="chip" data-subject="Professional EE">Professional EE</div>
+                </div>
+
+                <!-- Master Questions List View -->
+                <div id="view-master-content">
+                    <div class="filter-bar">
+                        <div class="filter-group">
+                            <label>Search</label>
+                            <input type="text" class="form-control" id="master-search" placeholder="Search questions..." style="min-width: 240px;">
+                        </div>
+                        <div class="filter-group">
+                            <label>Category</label>
+                            <select class="form-control" id="filter-category">
+                                <option value="all">All Categories</option>
+                                <option value="Objective">Objective</option>
+                                <option value="Computation">Computation</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label>Topic</label>
+                            <select class="form-control" id="filter-topic" style="max-width: 200px;">
+                                <option value="all">All Topics</option>
+                            </select>
+                        </div>
+                        <div style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;">
+                            <button class="btn btn-secondary btn-sm" id="btn-refresh-master">🔄 Refresh</button>
+                            <button class="btn btn-danger btn-sm" id="btn-delete-subject" disabled>Delete Subject Bank</button>
+                            <button class="btn btn-danger btn-sm" id="btn-delete-all">Delete All</button>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="table-wrapper" style="max-height: 600px; overflow-y: auto;">
+                            <table>
+                                <thead style="position: sticky; top: 0; background: var(--bg-surface); z-index: 10;">
+                                    <tr>
+                                        <th>Question</th>
+                                        <th>Subject</th>
+                                        <th>Topic</th>
+                                        <th>Category</th>
+                                        <th>Ans</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="master-table-body">
+                                    <tr><td colspan="5" class="text-center py-24"><span class="spinner"></span></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Upload progress modal -->
+    <div class="modal-overlay hidden" id="modal-upload">
+        <div class="modal" style="max-width:460px;">
+            <div class="modal-header">
+                <span style="font-size:20px;">📁</span>
+                <h3>Upload Questions</h3>
+                <button class="modal-close" id="upload-close">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Subject *</label>
+                    <select class="form-control" id="upload-subject">
+                        <option value="Mathematics">Mathematics</option>
+                        <option value="ESAS">ESAS</option>
+                        <option value="Professional EE">Professional EE</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Session Name (optional)</label>
+                    <input class="form-control" id="upload-session-name" placeholder="e.g. Midterm 2024 Set" />
+                </div>
+
+                <div class="drop-zone" id="drop-zone">
+                    <div class="drop-icon">📄</div>
+                    <h4>Drop your file here</h4>
+                    <p>Supports .csv files with columns: Question, Option A, Option B, Option C, Option D, Answer,
+                        Topic, Category</p>
+                    <div style="margin-top:12px;">
+                        <span id="selected-file-name" class="badge badge-teal hidden"></span>
+                    </div>
+                </div>
+
+                <div class="progress-bar mt-16 hidden" id="upload-progress-bar">
+                    <div class="progress-fill" id="upload-progress-fill" style="width:0%"></div>
+                </div>
+                <p class="text-sm text-muted mt-16" id="upload-status" style="text-align:center;"></p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="upload-cancel">Cancel</button>
+                <button class="btn btn-primary" id="upload-submit" disabled>Upload Questions</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <script type="module">
+        import { requireAuth, logout } from "../js/auth.js";
+        import { renderSidebar } from "../js/sidebar.js";
+        import { initSidebar, showToast, showConfirm, setButtonLoading, formatDateTime } from "../js/ui.js";
+        import { logActivity } from "../js/audit.js";
+        import { db } from "../js/firebase-config.js";
+        import {
+            collection, addDoc, getDocs, deleteDoc, doc,
+            serverTimestamp, query, orderBy, onSnapshot, writeBatch, where, getCountFromServer, collectionGroup
+        } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+        const user = await requireAuth("teacher");
+        document.getElementById("sidebar-mount").innerHTML = renderSidebar("question-bank", user);
+        document.getElementById("user-email-display").textContent = user.name || user.email;
+        document.getElementById("user-avatar").textContent = (user.name || user.email)[0].toUpperCase();
+        document.getElementById("logout-btn").addEventListener("click", logout);
+        initSidebar();
+
+        let activeSubject = "all";
+        let selectedFile = null;
+
+        function getTeacherOwnerKeys() {
+            return [user.teacherId, user.email, user.uid].filter(Boolean).map(String);
+        }
+
+        function isOwnedByCurrentTeacher(record = {}) {
+            const ownerKeys = getTeacherOwnerKeys();
+            return [
+                record.uploadedByTeacherId,
+                record.uploadedByUid,
+                record.uploaderEmail,
+                record.createdByEmail,
+                record.createdBy
+            ].some(value => value && ownerKeys.includes(String(value)));
+        }
+
+        // ─── Load stats ────────────────────────────────────────────────
+        async function loadStats() {
+            const subjects = ["Mathematics", "ESAS", "Professional EE"];
+            const ids = ["qs-math", "qs-esas", "qs-prof"];
+            let total = 0;
+
+            await Promise.all(subjects.map(async (s, i) => {
+                const q = query(collection(db, "question_banks"), where("subject", "==", s));
+                const snap = await getDocs(q);
+                let count = 0;
+                snap.forEach(d => {
+                    const data = d.data();
+                    if (user.role !== "admin" && !isOwnedByCurrentTeacher(data)) return;
+                    count += data.questionCount || 0;
+                });
+                document.getElementById(ids[i]).textContent = count;
+                total += count;
+            }));
+            document.getElementById("qs-total").textContent = total;
+        }
+
+        // ─── Master List Logic ────────────────────────────────────────
+        let masterQuestions = [];
+        let masterFiltered = [];
+
+        async function loadMasterQuestions() {
+            const tbody = document.getElementById("master-table-body");
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-24"><span class="spinner"></span></td></tr>`;
+            
+            try {
+                const q = collectionGroup(db, "questions");
+                const snap = await getDocs(q);
+                let rawQuestions = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+
+                // Client-side filtering to avoid Index requirement
+                if (user.role !== "admin") {
+                    rawQuestions = rawQuestions.filter(q => isOwnedByCurrentTeacher(q));
+                }
+                
+                // client-side deduplication for the Master List view
+                const seen = new Set();
+                masterQuestions = rawQuestions.filter(q => {
+                    const normalized = (q.questionText || "").toLowerCase().trim();
+                    const hash = `${normalized}|${q.subject}`;
+                    if (seen.has(hash)) return false;
+                    seen.add(hash);
+                    return true;
+                });
+                
+                // Populate topics dropdown
+                const topics = [...new Set(masterQuestions.map(q => q.topic).filter(Boolean))].sort();
+                const topicFilter = document.getElementById("filter-topic");
+                topicFilter.innerHTML = `<option value="all">All Topics</option>` + 
+                    topics.map(t => `<option value="${t}">${t}</option>`).join("");
+                
+                applyMasterFilters();
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="5" class="text-center py-24 text-danger">Failed to load: ${err.message}</td></tr>`;
+            }
+        }
+
+        function applyMasterFilters() {
+            const search = document.getElementById("master-search").value.toLowerCase();
+            const category = document.getElementById("filter-category").value;
+            const topic = document.getElementById("filter-topic").value;
+
+            masterFiltered = masterQuestions.filter(q => {
+                const matchSearch = !search || q.questionText?.toLowerCase().includes(search) || q.topic?.toLowerCase().includes(search);
+                const matchCategory = category === "all" || q.category === category;
+                const matchTopic = topic === "all" || q.topic === topic;
+                const matchSubject = activeSubject === "all" || q.subject === activeSubject;
+                return matchSearch && matchCategory && matchTopic && matchSubject;
+            });
+
+            renderMasterTable();
+        }
+
+        function renderMasterTable() {
+            const tbody = document.getElementById("master-table-body");
+            if (!masterFiltered.length) {
+                tbody.innerHTML = `<tr><td colspan="5" class="text-center py-24 text-muted">No questions found.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = masterFiltered.map(q => `
+                <tr>
+                    <td class="text-sm" style="max-width:340px; white-space:normal;">${q.questionText || "—"}</td>
+                    <td><span class="badge badge-teal">${q.subject || "—"}</span></td>
+                    <td class="text-xs text-muted">${q.topic || "—"}</td>
+                    <td><span class="badge ${q.category === "Computation" ? "badge-blue" : "badge-yellow"}">${q.category || "—"}</span></td>
+                    <td class="fw-600 text-accent">${q.correctAnswer || "—"}</td>
+                </tr>
+            `).join("");
+        }
+
+        document.getElementById("master-search").addEventListener("input", applyMasterFilters);
+        document.getElementById("filter-category").addEventListener("change", applyMasterFilters);
+        document.getElementById("filter-topic").addEventListener("change", applyMasterFilters);
+        document.getElementById("btn-refresh-master").addEventListener("click", loadMasterQuestions);
+        document.getElementById("btn-delete-subject").addEventListener("click", () => deleteQuestionBanks("subject"));
+        document.getElementById("btn-delete-all").addEventListener("click", () => deleteQuestionBanks("all"));
+
+        // Subject filter chips
+        document.querySelectorAll(".chip[data-subject]").forEach(chip => {
+            chip.addEventListener("click", () => {
+                document.querySelectorAll(".chip[data-subject]").forEach(c => c.classList.remove("active"));
+                chip.classList.add("active");
+                activeSubject = chip.dataset.subject;
+                updateDeleteControls();
+                applyMasterFilters();
+            });
+        });
+
+        function updateDeleteControls() {
+            document.getElementById("btn-delete-subject").disabled = activeSubject === "all";
+        }
+
+        // Initialize
+        updateDeleteControls();
+        loadMasterQuestions();
+        loadStats();
+
+        // Real-time listener for stats only now
+        const qStats = query(collection(db, "question_banks"));
+        onSnapshot(qStats, () => loadStats());
+
+        // ─── Upload flow ───────────────────────────────────────────────
+        const openUploadModal = () => {
+            document.getElementById("modal-upload").classList.remove("hidden");
+            selectedFile = null;
+            document.getElementById("selected-file-name").classList.add("hidden");
+            document.getElementById("upload-submit").disabled = true;
+            document.getElementById("upload-status").textContent = "";
+            document.getElementById("upload-progress-bar").classList.add("hidden");
+            document.getElementById("upload-progress-fill").style.width = "0%";
+        };
+
+        document.getElementById("btn-upload").addEventListener("click", openUploadModal);
+        document.getElementById("btn-upload2")?.addEventListener("click", openUploadModal);
+        document.getElementById("upload-close").addEventListener("click", () => document.getElementById("modal-upload").classList.add("hidden"));
+        document.getElementById("upload-cancel").addEventListener("click", () => document.getElementById("modal-upload").classList.add("hidden"));
+
+        // Drop zone
+        const dropZone = document.getElementById("drop-zone");
+        const fileInput = document.getElementById("file-input");
+
+        dropZone.addEventListener("click", () => fileInput.click());
+        dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("dragover"); });
+        dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+        dropZone.addEventListener("drop", (e) => {
+            e.preventDefault(); dropZone.classList.remove("dragover");
+            if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+        });
+        fileInput.addEventListener("change", () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+
+        function handleFile(file) {
+            selectedFile = file;
+            const nameEl = document.getElementById("selected-file-name");
+            nameEl.textContent = file.name;
+            nameEl.classList.remove("hidden");
+            document.getElementById("upload-submit").disabled = false;
+        }
+
+        function normalizeSubjectName(value) {
+            const lower = String(value || "").trim().toLowerCase();
+            if (!lower) return null;
+            if (lower.includes("math")) return "Mathematics";
+            if (lower.includes("esas")) return "ESAS";
+            if (lower === "ee" || lower.includes("profee") || lower.includes("professional")) return "Professional EE";
+            return null;
+        }
+
+        function suggestSubjectFromSheetName(sheetName) {
+            const lower = String(sheetName || "").trim().toLowerCase();
+            if (lower === "mathematics" || lower === "math") return "Mathematics";
+            if (lower === "esas") return "ESAS";
+            if (lower === "professional ee" || lower === "profee" || lower === "ee") return "Professional EE";
+            return null;
+        }
+
+        function resolveDetectedSubject(selectedSubject, rowSubject, sheetName) {
+            return normalizeSubjectName(rowSubject) || suggestSubjectFromSheetName(sheetName) || selectedSubject;
+        }
+
+        function normalizeQuestionSignature(value) {
+            return String(value || "").toLowerCase().replace(/\s+/g, " ").trim();
+        }
+
+        function findColumnIndices(headers) {
+            const mapping = {};
+            const searchPatterns = {
+                "question text": ["question text", "question", "q text", "item"],
+                "option a": ["option a", "a", "choice a", "opt a"],
+                "option b": ["option b", "b", "choice b", "opt b"],
+                "option c": ["option c", "c", "choice c", "opt c"],
+                "option d": ["option d", "d", "choice d", "opt d"],
+                "correct answer": ["correct answer", "answer", "key", "correct", "ans"],
+                "number": ["number", "no", "q#", "#", "id"],
+                "category": ["category", "type", "set", "description"],
+                "topic": ["topic", "subject matter", "sub-topic", "lesson"],
+                "subject": ["subject", "area", "course"]
+            };
+
+            Object.entries(searchPatterns).forEach(([key, patterns]) => {
+                headers.forEach((header, index) => {
+                    if (patterns.includes(header)) mapping[key] = index;
+                });
+            });
+
+            Object.entries(searchPatterns).forEach(([key, patterns]) => {
+                if (mapping[key] !== undefined) return;
+
+                headers.forEach((header, index) => {
+                    if (mapping[key] !== undefined) return;
+
+                    if (key.startsWith("option")) {
+                        const isShortMatch = header.length <= 2 && patterns.includes(header);
+                        const isLooseMatch = patterns.some((pattern) =>
+                            header.includes(pattern) && !header.includes("question") && !header.includes("answer")
+                        );
+                        if (isShortMatch || isLooseMatch) mapping[key] = index;
+                    } else if (patterns.some((pattern) => header.includes(pattern))) {
+                        mapping[key] = index;
+                    }
+                });
+            });
+
+            return mapping;
+        }
+
+        function isHeaderValid(mapping) {
+            return ["question text", "option a", "option b", "option c", "option d", "correct answer"]
+                .every((key) => mapping[key] !== undefined);
+        }
+
+        function parseWorksheet(worksheet, sheetName, selectedSubject) {
+            const json = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false });
+            if (json.length < 2) {
+                return {
+                    questions: [],
+                    metadata: { sheetName, detectedSubjects: [], parsedQuestionCount: 0, skippedReason: "Missing header row" }
+                };
+            }
+
+            const headers = json[0].map((header) => String(header || "").toLowerCase().trim());
+            const colMapping = findColumnIndices(headers);
+            if (!isHeaderValid(colMapping)) {
+                return {
+                    questions: [],
+                    metadata: { sheetName, detectedSubjects: [], parsedQuestionCount: 0, skippedReason: "Missing required columns" }
+                };
+            }
+
+            const detectedSubjects = new Set();
+            const questions = [];
+            const rows = json.slice(1).filter((row) =>
+                Array.isArray(row) && row.some((cell) => String(cell ?? "").trim() !== "")
+            );
+
+            rows.forEach((row, index) => {
+                const questionText = String(row[colMapping["question text"]] || "").trim();
+                if (!questionText) return;
+                const correctAnswer = String(row[colMapping["correct answer"]] || "").trim().toUpperCase();
+                if (!correctAnswer) return;
+
+                const rowSubject = colMapping.subject !== undefined
+                    ? String(row[colMapping.subject] || "").trim()
+                    : "";
+                const detectedSubject = resolveDetectedSubject(selectedSubject, rowSubject, sheetName);
+                detectedSubjects.add(detectedSubject);
+
+                let topic = colMapping.topic !== undefined
+                    ? String(row[colMapping.topic] || "").trim()
+                    : "";
+                let category = colMapping.category !== undefined
+                    ? String(row[colMapping.category] || "").trim()
+                    : "";
+
+                if (!topic ||
+                    topic.toLowerCase() === selectedSubject.toLowerCase() ||
+                    topic.toLowerCase() === rowSubject.toLowerCase() ||
+                    (normalizeSubjectName(topic) && topic.toLowerCase() !== String(sheetName || "").trim().toLowerCase())) {
+                    topic = sheetName;
+                }
+
+                if (topic.toLowerCase() === "computation" || topic.toLowerCase() === "objective") {
+                    if (!category) category = topic;
+                    topic = sheetName;
+                }
+
+                const rawNumber = colMapping.number !== undefined ? row[colMapping.number] : null;
+                const parsedNumber = Number.parseInt(rawNumber, 10);
+
+                questions.push({
+                    questionNumber: Number.isFinite(parsedNumber) ? parsedNumber : index + 1,
+                    questionText,
+                    optionA: String(row[colMapping["option a"]] || "").trim(),
+                    optionB: String(row[colMapping["option b"]] || "").trim(),
+                    optionC: String(row[colMapping["option c"]] || "").trim(),
+                    optionD: String(row[colMapping["option d"]] || "").trim(),
+                    correctAnswer,
+                    topic,
+                    category: category || "",
+                    subject: detectedSubject
+                });
+            });
+
+            return {
+                questions,
+                metadata: {
+                    sheetName,
+                    detectedSubjects: [...detectedSubjects],
+                    parsedQuestionCount: questions.length,
+                    skippedReason: questions.length ? null : "No valid question rows"
+                }
+            };
+        }
+
+        // ─── Spreadsheet Parser (SheetJS) ────────────────────────────────────────────────
+        document.getElementById("upload-submit").addEventListener("click", async () => {
+            if (!selectedFile) return;
+            const subject = document.getElementById("upload-subject").value;
+            const sessionName = document.getElementById("upload-session-name").value.trim();
+            const btn = document.getElementById("upload-submit");
+            const statusEl = document.getElementById("upload-status");
+            const progressBar = document.getElementById("upload-progress-bar");
+            const progressFill = document.getElementById("upload-progress-fill");
+
+            setButtonLoading(btn, true, "Uploading…");
+            progressBar.classList.remove("hidden");
+            progressFill.style.width = "10%";
+
+            try {
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        const sheetResults = workbook.SheetNames.map((sheetName) =>
+                            parseWorksheet(workbook.Sheets[sheetName], sheetName, subject)
+                        );
+                        const parsed = sheetResults.flatMap((result) => result.questions);
+                        const validSheetCount = sheetResults.filter((result) => result.metadata.parsedQuestionCount > 0).length;
+                        const skippedSheetCount = sheetResults.filter((result) => result.metadata.skippedReason).length;
+
+                        if (!parsed.length) throw new Error("No valid questions found in file.");
+
+                        // ─── Update or Create Logic ───
+                        statusEl.textContent = `Analyzing ${workbook.SheetNames.length} sheets…`;
+                        progressFill.style.width = "20%";
+                        const teacherId = user.teacherId || "";
+                        const sourceFileName = selectedFile.name;
+                        const uploadSessionName = sessionName || selectedFile.name;
+                        const existingSnap = await getDocs(collectionGroup(db, "questions"));
+                        const existingMap = new Map();
+                        existingSnap.forEach(d => {
+                            const questionData = d.data();
+                            const sameUploader =
+                                (questionData.uploadedByTeacherId || "") === teacherId ||
+                                (questionData.uploadedByUid || "") === (user.uid || "");
+                            if (!sameUploader) return;
+
+                            const key = `${normalizeQuestionSignature(questionData.questionText)}|${questionData.subject}`;
+                            if (!existingMap.has(key)) existingMap.set(key, []);
+                            existingMap.get(key).push({ id: d.id, bankId: d.ref.parent.parent.id, data: questionData });
+                        });
+
+                        const questionsBySubject = parsed.reduce((groups, question) => {
+                            if (!groups.has(question.subject)) groups.set(question.subject, []);
+                            groups.get(question.subject).push(question);
+                            return groups;
+                        }, new Map());
+
+                        let totalUpdated = 0;
+                        let totalCreated = 0;
+                        let totalDuplicates = 0;
+                        let importedBankCount = 0;
+                        let processedSubjects = 0;
+
+                        for (const [subjectName, subjectQuestions] of questionsBySubject.entries()) {
+                            statusEl.textContent = `Processing ${subjectName} bank…`;
+                            const qBank = query(
+                                collection(db, "question_banks"),
+                                where("subject", "==", subjectName),
+                                where("uploadedByTeacherId", "==", teacherId)
+                            );
+                            const bankSnap = await getDocs(qBank);
+                            const existingBankDoc = bankSnap.docs.find((bankDoc) => {
+                                const bankData = bankDoc.data();
+                                const bankSourceFileName = (bankData.sourceFileName || "").trim().toLowerCase();
+                                const bankSessionName = (bankData.sessionName || "").trim().toLowerCase();
+                                const normalizedSourceFileName = sourceFileName.trim().toLowerCase();
+                                return bankSourceFileName === normalizedSourceFileName ||
+                                    (!bankSourceFileName && bankSessionName === uploadSessionName.trim().toLowerCase());
+                            });
+
+                            const bankSessionRef = existingBankDoc
+                                ? existingBankDoc.ref
+                                : doc(collection(db, "question_banks"));
+                            const bankQuestionMap = new Map();
+
+                            if (existingBankDoc) {
+                                const bankQuestionsSnap = await getDocs(collection(db, "question_banks", bankSessionRef.id, "questions"));
+                                bankQuestionsSnap.forEach((questionDoc) => {
+                                    const questionData = questionDoc.data();
+                                    const key = `${normalizeQuestionSignature(questionData.questionText)}|${subjectName}`;
+                                    if (!bankQuestionMap.has(key)) bankQuestionMap.set(key, []);
+                                    bankQuestionMap.get(key).push({ id: questionDoc.id });
+                                });
+                            }
+
+                            const seenInFile = new Set();
+                            const toUpdate = [];
+                            const toCreate = [];
+                            let duplicateCount = 0;
+
+                            subjectQuestions.forEach((question) => {
+                                const key = `${normalizeQuestionSignature(question.questionText)}|${subjectName}`;
+                                if (seenInFile.has(key)) {
+                                    duplicateCount++;
+                                    return;
+                                }
+
+                                seenInFile.add(key);
+
+                                if (bankQuestionMap.has(key)) {
+                                    toUpdate.push({ existingDocs: bankQuestionMap.get(key), newData: question });
+                                } else if (existingMap.has(key)) {
+                                    duplicateCount++;
+                                } else {
+                                    toCreate.push(question);
+                                }
+                            });
+
+                            totalDuplicates += duplicateCount;
+                            if (toUpdate.length === 0 && toCreate.length === 0) {
+                                processedSubjects++;
+                                progressFill.style.width = `${20 + (processedSubjects / questionsBySubject.size) * 80}%`;
+                                continue;
+                            }
+
+                            importedBankCount++;
+                            const currentCount = existingBankDoc?.data().questionCount || 0;
+                            const metadataBatch = writeBatch(db);
+                            metadataBatch.set(bankSessionRef, {
+                                subject: subjectName,
+                                sessionName: uploadSessionName,
+                                sourceFileName,
+                                importedAt: serverTimestamp(),
+                                uploaderEmail: user.email,
+                                uploadedByTeacherId: teacherId,
+                                uploadedByUid: user.uid || "",
+                                questionCount: currentCount + toCreate.length
+                            }, { merge: true });
+                            await metadataBatch.commit();
+
+                            if (toUpdate.length > 0) {
+                                statusEl.textContent = `Updating ${toUpdate.length} ${subjectName} questions…`;
+                                for (let i = 0; i < toUpdate.length; i += 500) {
+                                    const batch = writeBatch(db);
+                                    const chunk = toUpdate.slice(i, i + 500);
+                                    chunk.forEach((item) => {
+                                        item.existingDocs.forEach((docInfo) => {
+                                            const qRef = doc(db, "question_banks", bankSessionRef.id, "questions", docInfo.id);
+                                            batch.update(qRef, {
+                                                ...item.newData,
+                                                subject: subjectName,
+                                                sessionName: uploadSessionName,
+                                                importSessionId: bankSessionRef.id,
+                                                sourceFileName,
+                                                updatedAt: serverTimestamp(),
+                                                lastUpdatedBy: user.email
+                                            });
+                                        });
+                                    });
+                                    await batch.commit();
+                                }
+                            }
+
+                            if (toCreate.length > 0) {
+                                statusEl.textContent = `Adding ${toCreate.length} new ${subjectName} questions…`;
+                                for (let i = 0; i < toCreate.length; i += 500) {
+                                    const batch = writeBatch(db);
+                                    const chunk = toCreate.slice(i, i + 500);
+                                    chunk.forEach((question) => {
+                                        const qRef = doc(collection(db, "question_banks", bankSessionRef.id, "questions"));
+                                        batch.set(qRef, {
+                                            ...question,
+                                            subject: subjectName,
+                                            sessionName: uploadSessionName,
+                                            importSessionId: bankSessionRef.id,
+                                            sourceFileName,
+                                            importedAt: serverTimestamp(),
+                                            uploaderEmail: user.email,
+                                            uploadedByTeacherId: teacherId,
+                                            uploadedByUid: user.uid || ""
+                                        });
+                                    });
+                                    await batch.commit();
+                                }
+                            }
+
+                            totalUpdated += toUpdate.length;
+                            totalCreated += toCreate.length;
+                            processedSubjects++;
+                            progressFill.style.width = `${20 + (processedSubjects / questionsBySubject.size) * 80}%`;
+                        }
+
+                        if (totalCreated === 0 && totalUpdated === 0) {
+                            throw new Error("No valid questions found to process.");
+                        }
+
+                        progressFill.style.width = "100%";
+                        const sheetSummary = `${validSheetCount} sheets${skippedSheetCount ? `, ${skippedSheetCount} skipped` : ""}`;
+                        statusEl.textContent = `✅ Processed ${importedBankCount} subject banks from ${sheetSummary}: ${totalUpdated} updated, ${totalCreated} added.`;
+                        
+                        // Log activity
+                        await logActivity(user, "UPLOAD_QUESTIONS", `Processed ${totalUpdated + totalCreated} questions across ${importedBankCount} subject banks from ${sheetSummary}.`, {
+                            updated: totalUpdated,
+                            added: totalCreated,
+                            duplicatesSkipped: totalDuplicates,
+                            total: totalUpdated + totalCreated,
+                            subjectBanks: importedBankCount,
+                            selectedSubject: subject,
+                            sessionName: uploadSessionName,
+                            sourceFileName,
+                            validSheetCount,
+                            skippedSheetCount
+                        });
+
+                        const duplicateSuffix = totalDuplicates ? ` ${totalDuplicates} duplicates skipped.` : "";
+                        showToast(`Processed ${importedBankCount} subject banks: ${totalUpdated} updated, ${totalCreated} added.${duplicateSuffix}`, "success");
+                        setTimeout(() => {
+                            document.getElementById("modal-upload").classList.add("hidden");
+                            loadMasterQuestions(); // Refresh list
+                        }, 2000);
+
+                    } catch (err) {
+                        showToast("Upload failed: " + err.message, "error");
+                        statusEl.textContent = "❌ " + err.message;
+                    } finally {
+                        setButtonLoading(btn, false);
+                    }
+                };
+                reader.readAsArrayBuffer(selectedFile);
+            } catch (err) {
+                showToast("Upload failed: " + err.message, "error");
+                statusEl.textContent = "❌ " + err.message;
+                setButtonLoading(btn, false);
+            }
+        });
+
+        // ─── Delete question banks ─────────────────────────────────────
+        async function getQuestionBankDocsForDelete(scope) {
+            const banksRef = collection(db, "question_banks");
+            const bankQuery = scope === "subject"
+                ? query(banksRef, where("subject", "==", activeSubject))
+                : query(banksRef);
+            const snap = await getDocs(bankQuery);
+            const teacherId = user.teacherId || user.email;
+            return snap.docs.filter(d => {
+                const data = d.data();
+                return data.uploadedByTeacherId === teacherId || isOwnedByCurrentTeacher(data);
+            });
+        }
+
+        async function deleteQuestionBankDoc(bankDoc) {
+            const questionsSnap = await getDocs(collection(db, "question_banks", bankDoc.id, "questions"));
+            const questionDocs = questionsSnap.docs;
+
+            for (let i = 0; i < questionDocs.length; i += 450) {
+                const batch = writeBatch(db);
+                questionDocs.slice(i, i + 450).forEach(d => batch.delete(d.ref));
+                await batch.commit();
+            }
+
+            const batch = writeBatch(db);
+            batch.delete(bankDoc.ref);
+            await batch.commit();
+
+            return questionsSnap.size;
+        }
+
+        async function deleteQuestionBanks(scope) {
+            if (scope === "subject" && activeSubject === "all") {
+                showToast("Select a subject first.", "warning");
+                return;
+            }
+
+            const button = document.getElementById(scope === "subject" ? "btn-delete-subject" : "btn-delete-all");
+            try {
+                const bankDocs = await getQuestionBankDocsForDelete(scope);
+                if (!bankDocs.length) {
+                    showToast(scope === "subject" ? `No ${activeSubject} question bank found for your account.` : "No question banks found for your account.", "info");
+                    return;
+                }
+
+                const estimatedQuestions = bankDocs.reduce((sum, d) => sum + (Number(d.data().questionCount) || 0), 0);
+                const label = scope === "subject" ? activeSubject : "all of your question banks";
+                const ok = await showConfirm(
+                    `Delete <strong>${label}</strong>? This will remove ${bankDocs.length} bank record${bankDocs.length === 1 ? "" : "s"}${estimatedQuestions ? ` and about ${estimatedQuestions} question${estimatedQuestions === 1 ? "" : "s"}` : ""}. This cannot be undone.`,
+                    scope === "subject" ? "Delete Subject Bank" : "Delete All Question Banks",
+                    "Delete",
+                    true
+                );
+                if (!ok) return;
+
+                setButtonLoading(button, true, "Deleting...");
+                let deletedQuestions = 0;
+                for (const bankDoc of bankDocs) {
+                    deletedQuestions += await deleteQuestionBankDoc(bankDoc);
+                }
+
+                await logActivity(user, "DELETE_QUESTION_BANKS", `Deleted ${label}`, {
+                    scope,
+                    subject: scope === "subject" ? activeSubject : null,
+                    bankCount: bankDocs.length,
+                    questionCount: deletedQuestions
+                });
+
+                showToast(`Deleted ${bankDocs.length} bank${bankDocs.length === 1 ? "" : "s"} and ${deletedQuestions} question${deletedQuestions === 1 ? "" : "s"}.`, "success");
+                await loadMasterQuestions();
+                await loadStats();
+            } catch (err) {
+                showToast("Error deleting question bank: " + err.message, "error");
+            } finally {
+                setButtonLoading(button, false);
+                updateDeleteControls();
+            }
+        }
+
+        // ─── Delete session ────────────────────────────────────────────
+        window.deleteSession = async (sessionId, name) => {
+            const ok = await showConfirm(`Delete all questions in session "<strong>${name}</strong>"? This cannot be undone.`, "Delete Session");
+            if (!ok) return;
+            try {
+                // Delete questions in subcollection
+                const qSnap = await getDocs(collection(db, "question_banks", sessionId, "questions"));
+                const batch = writeBatch(db);
+                qSnap.forEach(d => batch.delete(d.ref));
+                
+                // Delete session document
+                batch.delete(doc(db, "question_banks", sessionId));
+                
+                await batch.commit();
+
+                // Log activity
+                await logActivity(user, "DELETE_QUESTIONS", `Deleted question session: ${name}`, {
+                    sessionId,
+                    sessionName: name,
+                    count: qSnap.size
+                });
+
+                showToast(`Session "${name}" deleted.`, "success");
+            } catch (err) {
+                showToast("Error deleting session: " + err.message, "error");
+            }
+        };
+
+        // Template download
+        document.getElementById("btn-download-template").addEventListener("click", () => {
+            const a = document.createElement("a");
+            a.href = "../question-bank-template.xlsx";
+            a.download = "question-bank-template.xlsx";
+            a.click();
+            showToast("Template downloaded!", "info");
+        });
+
+        // ─── Export logic ──────────────────────────────────────────────
+        document.getElementById("btn-export").addEventListener("click", () => {
+            if (!masterQuestions.length) {
+                showToast("No questions available to export.", "error");
+                return;
+            }
+
+            // Map current (filtered or all) questions to spreadsheet format
+            const exportData = masterFiltered.map(q => ({
+                "Question": q.questionText || "",
+                "Option A": q.optionA || "",
+                "Option B": q.optionB || "",
+                "Option C": q.optionC || "",
+                "Option D": q.optionD || "",
+                "Answer": q.correctAnswer || "",
+                "Topic": q.topic || "",
+                "Category": q.category || ""
+            }));
+
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            XLSX.utils.book_append_sheet(wb, ws, "Questions");
+            
+            const fileName = `PBEC_QuestionBank_${new Date().toISOString().split('T')[0]}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+            
+            showToast("Question bank exported!", "success");
+        });
+    </script>
+</body>
+
+</html>

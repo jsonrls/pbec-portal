@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PBEC — Summary & Reports</title>
+    <link rel="stylesheet" href="../css/style.css" />
+</head>
+
+<body>
+    <div class="app-shell">
+        <div id="sidebar-mount"></div>
+
+        <div class="main-content">
+            <header class="topbar">
+                <button class="btn btn-ghost btn-icon hamburger" id="hamburger">☰</button>
+                <div style="flex:1;">
+                    <div class="topbar-title">Summary & Reports</div>
+                    <div class="topbar-subtitle">Record scores and view analytics</div>
+                </div>
+                <div class="topbar-actions">
+                    <button class="btn btn-secondary" id="btn-export" disabled>⬇ Export CSV</button>
+                </div>
+            </header>
+
+            <main class="page-content">
+
+                <!-- Exam Selector -->
+                <div class="card mb-24" style="margin-bottom:24px;">
+                    <div class="card-body"
+                        style="display:grid;grid-template-columns:1fr 1fr auto;gap:16px;align-items:flex-end;">
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label>Select Subject</label>
+                            <select class="form-control" id="sel-subject">
+                                <option value="">— All Subjects —</option>
+                                <option value="Mathematics">Mathematics</option>
+                                <option value="ESAS">ESAS</option>
+                                <option value="Professional EE">Professional EE</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label>Select Exam</label>
+                            <select class="form-control" id="sel-exam" disabled>
+                                <option value="">— Select a subject first —</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary" id="btn-load-exam" disabled>Load Exam</button>
+                    </div>
+                </div>
+
+                <!-- Analytics cards (shown after exam is loaded) -->
+                <div id="analytics-section" class="hidden">
+                    <div class="stat-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:24px;"
+                        id="analytics-cards">
+                        <div class="stat-card">
+                            <div class="stat-icon blue">👥</div>
+                            <div class="stat-info">
+                                <div class="stat-value" id="an-total">—</div>
+                                <div class="stat-label">Students</div>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon teal">📊</div>
+                            <div class="stat-info">
+                                <div class="stat-value" id="an-avg">—</div>
+                                <div class="stat-label">Average Score</div>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon green">🏆</div>
+                            <div class="stat-info">
+                                <div class="stat-value" id="an-high">—</div>
+                                <div class="stat-label">Highest</div>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon red">📉</div>
+                            <div class="stat-info">
+                                <div class="stat-value" id="an-low">—</div>
+                                <div class="stat-label">Lowest</div>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon yellow">✅</div>
+                            <div class="stat-info">
+                                <div class="stat-value" id="an-pass">—</div>
+                                <div class="stat-label">Pass Rate</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Score Table -->
+                    <div class="section-header mb-16">
+                        <h2 id="table-exam-title">Exam Scores</h2>
+                        <div class="toolbar" style="margin-bottom:0;">
+                            <div class="search-box" style="min-width:200px;">
+                                <span class="search-icon">🔍</span>
+                                <input class="form-control" id="search-students" placeholder="Search students…" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Student</th>
+                                        <th>Student ID</th>
+                                        <th>Year</th>
+                                        <th>Section</th>
+                                        <th>Score (Set A)</th>
+                                        <th>Score (Set B)</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="scores-tbody">
+                                    <tr>
+                                        <td colspan="8">
+                                            <div class="empty-state">
+                                                <div class="empty-icon">📊</div>
+                                                <h4>No data</h4>
+                                                <p>Select and load an exam to enter scores</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <script type="module">
+        import { requireAuth, logout } from "../js/auth.js";
+        import { renderSidebar } from "../js/sidebar.js";
+        import { initSidebar, showToast, setButtonLoading, debounce } from "../js/ui.js";
+        import { getSettings } from "../js/settings.js";
+        import { db } from "../js/firebase-config.js";
+        import {
+            collection, getDocs, setDoc, doc,
+            serverTimestamp, query, orderBy, where, onSnapshot
+        } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+        const user = await requireAuth("admin");
+        const settings = await getSettings();
+        const PASSING_SCORE = settings.passingScore;
+        
+        document.getElementById("sidebar-mount").innerHTML = renderSidebar("summary", user);
+        document.getElementById("user-email-display").textContent = user.name || user.email;
+        document.getElementById("user-avatar").textContent = (user.name || user.email)[0].toUpperCase();
+        document.getElementById("logout-btn").addEventListener("click", logout);
+        initSidebar();
+        let allStudents = [];
+        let currentExam = null;
+        let resultsMap = {};    // studentId -> { scoreA, scoreB }
+        let unsubResults = null;
+
+        // ─── Load students ─────────────────────────────────────────────
+        const snap = await getDocs(query(collection(db, "students"), orderBy("name")));
+        allStudents = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+
+        // ─── Subject → Exam chain ──────────────────────────────────────
+        const selSubject = document.getElementById("sel-subject");
+        const selExam = document.getElementById("sel-exam");
+        const btnLoad = document.getElementById("btn-load-exam");
+
+        selSubject.addEventListener("change", async () => {
+            const subject = selSubject.value;
+            selExam.innerHTML = `<option value="">Loading…</option>`;
+            selExam.disabled = true;
+            btnLoad.disabled = true;
+
+            if (!subject) { selExam.innerHTML = `<option value="">— Select a subject first —</option>`; return; }
+
+            const examSnap = await getDocs(query(collection(db, "exams"), where("subject", "==", subject)));
+            const examDocs = examSnap.docs.sort((a, b) => {
+                const aTime = a.data().createdAt?.toMillis ? a.data().createdAt.toMillis() : new Date(a.data().createdAt || 0).getTime();
+                const bTime = b.data().createdAt?.toMillis ? b.data().createdAt.toMillis() : new Date(b.data().createdAt || 0).getTime();
+                return bTime - aTime;
+            });
+
+            if (examDocs.length === 0) {
+                selExam.innerHTML = `<option value="">No exams found for ${subject}</option>`;
+                return;
+            }
+            selExam.innerHTML = `<option value="">— Choose an exam —</option>` +
+                examDocs.map(d => `<option value="${d.id}" data-name="${d.data().examName}">${d.data().examName}</option>`).join("");
+            selExam.disabled = false;
+        });
+
+        selExam.addEventListener("change", () => {
+            btnLoad.disabled = !selExam.value;
+        });
+
+        btnLoad.addEventListener("click", async () => {
+            const examId = selExam.value;
+            const examName = selExam.options[selExam.selectedIndex].dataset.name;
+            if (!examId) return;
+
+            setButtonLoading(btnLoad, true, "Loading…");
+
+            try {
+                const examDoc = await getDocs(query(collection(db, "exams"), where("__name__", "==", examId)));
+                if (examDoc.empty) throw new Error("Exam not found.");
+                currentExam = { _id: examId, ...examDoc.docs[0].data() };
+
+                document.getElementById("table-exam-title").textContent = examName;
+                document.getElementById("analytics-section").classList.remove("hidden");
+                document.getElementById("btn-export").disabled = false;
+
+                // Subscribe to results for this exam
+                if (unsubResults) unsubResults();
+                unsubResults = onSnapshot(
+                    query(collection(db, "examResults"), where("examId", "==", examId)),
+                    (snap) => {
+                        resultsMap = {};
+                        snap.forEach(d => { resultsMap[d.data().studentDocId] = d.data(); });
+                        renderScoreTable(allStudents);
+                    }
+                );
+            } catch (err) {
+                showToast("Error loading exam: " + err.message, "error");
+            } finally {
+                setButtonLoading(btnLoad, false);
+            }
+        });
+
+        // ─── Render score table ────────────────────────────────────────
+        function renderScoreTable(students) {
+            const search = document.getElementById("search-students")?.value?.toLowerCase() || "";
+            const filtered = students.filter(s =>
+                !search || s.name?.toLowerCase().includes(search) || s.studentId?.toLowerCase().includes(search)
+            );
+
+            const tbody = document.getElementById("scores-tbody");
+            tbody.innerHTML = filtered.map(s => {
+                const r = resultsMap[s._id] || {};
+                const scoreA = r.scoreA ?? "";
+                const scoreB = r.scoreB ?? "";
+                const best = Math.max(scoreA !== "" ? Number(scoreA) : 0, scoreB !== "" ? Number(scoreB) : 0);
+                const hasBoth = scoreA !== "" && scoreB !== "";
+                const passed = hasBoth && best >= PASSING_SCORE;
+                const statusBadge = hasBoth
+                    ? (passed ? `<span class="badge badge-green">✅ PASSED</span>` : `<span class="badge badge-red">❌ FAILED</span>`)
+                    : `<span class="badge badge-gray">Pending</span>`;
+
+                return `
+        <tr id="row-${s._id}">
+          <td>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div style="width:28px;height:28px;border-radius:50%;background:var(--accent-dim);color:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex-shrink:0;">${(s.name || "?")[0].toUpperCase()}</div>
+              <span class="fw-600">${s.name || "—"}</span>
+            </div>
+          </td>
+          <td><span class="badge badge-gray">${s.studentId || "—"}</span></td>
+          <td>${s.yearLevel || "—"}</td>
+          <td>${s.section || "—"}</td>
+          <td>
+            <input
+              type="number" min="0" max="100"
+              class="score-input" id="scoreA-${s._id}"
+              value="${scoreA}"
+              placeholder="—"
+              onchange="saveScore('${s._id}', 'A', this.value)"
+            />
+          </td>
+          <td>
+            <input
+              type="number" min="0" max="100"
+              class="score-input" id="scoreB-${s._id}"
+              value="${scoreB}"
+              placeholder="—"
+              onchange="saveScore('${s._id}', 'B', this.value)"
+            />
+          </td>
+          <td>${statusBadge}</td>
+          <td>
+            <button class="btn btn-ghost btn-sm" onclick="clearScore('${s._id}')">🗑</button>
+          </td>
+        </tr>
+      `;
+            }).join("") || `<tr><td colspan="8"><div class="empty-state" style="padding:24px 0;"><h4>No students found</h4></div></td></tr>`;
+
+            updateAnalytics();
+        }
+
+        // Search students in score table
+        const doSearch = debounce(() => renderScoreTable(allStudents), 250);
+        document.getElementById("search-students").addEventListener("input", doSearch);
+
+        // ─── Save score ────────────────────────────────────────────────
+        window.saveScore = async (studentDocId, set, rawValue) => {
+            if (!currentExam) return;
+            const value = rawValue === "" ? null : Math.min(100, Math.max(0, Number(rawValue)));
+            try {
+                const docId = `${currentExam._id}_${studentDocId}`;
+                const existing = resultsMap[studentDocId] || {};
+                await setDoc(doc(db, "examResults", docId), {
+                    examId: currentExam._id,
+                    examName: currentExam.examName,
+                    subject: currentExam.subject,
+                    studentDocId,
+                    scoreA: set === "A" ? value : (existing.scoreA ?? null),
+                    scoreB: set === "B" ? value : (existing.scoreB ?? null),
+                    updatedAt: serverTimestamp()
+                }, { merge: true });
+            } catch (err) {
+                showToast("Error saving score: " + err.message, "error");
+            }
+        };
+
+        window.clearScore = async (studentDocId) => {
+            if (!currentExam) return;
+            try {
+                const docId = `${currentExam._id}_${studentDocId}`;
+                await setDoc(doc(db, "examResults", docId), {
+                    examId: currentExam._id, studentDocId,
+                    scoreA: null, scoreB: null, updatedAt: serverTimestamp()
+                }, { merge: true });
+                showToast("Scores cleared.", "info");
+            } catch (err) {
+                showToast("Error: " + err.message, "error");
+            }
+        };
+
+        // ─── Analytics ─────────────────────────────────────────────────
+        function updateAnalytics() {
+            const scores = allStudents
+                .map(s => resultsMap[s._id])
+                .filter(r => r && (r.scoreA !== null || r.scoreB !== null))
+                .map(r => Math.max(r.scoreA ?? 0, r.scoreB ?? 0));
+
+            const total = allStudents.length;
+            const avg = scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : "—";
+            const high = scores.length ? Math.max(...scores) : "—";
+            const low = scores.length ? Math.min(...scores) : "—";
+            const passed = scores.filter(s => s >= PASSING_SCORE).length;
+            const rate = scores.length ? `${Math.round((passed / scores.length) * 100)}%` : "—";
+
+            document.getElementById("an-total").textContent = total;
+            document.getElementById("an-avg").textContent = avg;
+            document.getElementById("an-high").textContent = high;
+            document.getElementById("an-low").textContent = low;
+            document.getElementById("an-pass").textContent = rate;
+        }
+
+        // ─── Export CSV ────────────────────────────────────────────────
+        document.getElementById("btn-export").addEventListener("click", () => {
+            if (!currentExam) return;
+            const rows = [["Name", "Student ID", "Year", "Section", "Set A Score", "Set B Score", "Best Score", "Status"]];
+            allStudents.forEach(s => {
+                const r = resultsMap[s._id] || {};
+                const a = r.scoreA ?? "";
+                const b = r.scoreB ?? "";
+                const best = (a !== "" || b !== "") ? Math.max(a !== "" ? +a : 0, b !== "" ? +b : 0) : "";
+                const status = (a !== "" && b !== "") ? (best >= PASSING_SCORE ? "PASSED" : "FAILED") : "Pending";
+                rows.push([s.name, s.studentId, s.yearLevel, s.section, a, b, best, status]);
+            });
+            const csv = rows.map(r => r.map(v => `"${v}"`).join(",")).join("\n");
+            const blob = new Blob([csv], { type: "text/csv" });
+            const a = Object.assign(document.createElement("a"), {
+                href: URL.createObjectURL(blob),
+                download: `${currentExam.examName.replace(/[^a-z0-9]/gi, "_")}_results.csv`
+            });
+            a.click();
+            showToast("Results exported!", "success");
+        });
+    </script>
+</body>
+
+</html>

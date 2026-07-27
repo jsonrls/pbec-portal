@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PBEC — Database Setup</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        body { background: var(--bg-dim); display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; font-family: sans-serif; }
+        .setup-card { background: var(--bg-card); padding: 40px; border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); max-width: 500px; width: 100%; border: 1px solid var(--border); }
+        .log { margin-top: 20px; padding: 15px; background: #000; color: #0f0; font-family: monospace; font-size: 12px; border-radius: 4px; height: 150px; overflow-y: auto; white-space: pre-wrap; }
+        .status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; margin-bottom: 20px; }
+        .status-ready { background: #e6fffa; color: #2c7a7b; }
+    </style>
+</head>
+<body>
+    <div class="setup-card">
+        <h1 style="margin-top:0;">Database Setup</h1>
+        <p class="text-muted">Initialize collections and create system accounts.</p>
+        
+        <div id="status" class="status-badge status-ready">Ready to Initialize</div>
+
+        <div style="background:var(--bg-dim); padding:16px; border-radius:8px; margin-bottom:20px; border:1px solid var(--border);">
+            <h3 style="margin-top:0; font-size:14px;">1. System Accounts</h3>
+            <div class="form-group">
+                <label>Default Password for both</label>
+                <input class="form-control" type="text" id="setup-password" value="pbec2026">
+            </div>
+            <button id="auth-btn" class="btn btn-secondary btn-full" style="margin-top:10px;">👤 Create Admin & Teacher</button>
+        </div>
+
+        <div style="background:var(--bg-dim); padding:16px; border-radius:8px; margin-bottom:20px; border:1px solid var(--border);">
+            <h3 style="margin-top:0; font-size:14px;">2. Data Initialization</h3>
+            <button id="run-btn" class="btn btn-primary btn-full">🚀 Initialize 50 Students & Questions</button>
+        </div>
+        
+        <div id="log" class="log">Waiting for action...</div>
+        
+        <p style="margin-top:20px; font-size:12px; text-align:center;">
+            <a href="index.html" class="btn btn-ghost">Back to Login</a>
+        </p>
+    </div>
+
+    <script type="module">
+        import { db, auth } from "./js/firebase-config.js";
+        import { createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+        import { collection, doc, setDoc, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+        const logEl = document.getElementById('log');
+        const runBtn = document.getElementById('run-btn');
+        const authBtn = document.getElementById('auth-btn');
+
+        function log(msg) {
+            logEl.textContent += `\n> ${msg}`;
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        const sampleStudents = [
+            { name: "Alice Reyes", studentId: "2024-1000", program: "BSEE", yearLevel: "3rd Year", section: "EE-3A" },
+            { name: "Bob Fernandez", studentId: "2024-1001", program: "BSEE", yearLevel: "1st Year", section: "EE-1A" },
+            { name: "Charlie Garcia", studentId: "2024-1002", program: "BSEE", yearLevel: "1st Year", section: "EE-1A" },
+            { name: "Diana Santos", studentId: "2024-1003", program: "BSEE", yearLevel: "3rd Year", section: "EE-3A" },
+            { name: "Evelyn Cruz", studentId: "2024-1004", program: "BSEE", yearLevel: "3rd Year", section: "EE-3A" },
+            { name: "Frank Lee", studentId: "2024-1005", program: "BSEE", yearLevel: "5th Year", section: "EE-5A" },
+            { name: "Grace Lim", studentId: "2024-1006", program: "BSEE", yearLevel: "1st Year", section: "EE-1A" },
+            { name: "Henry Tan", studentId: "2024-1007", program: "BSEE", yearLevel: "2nd Year", section: "EE-2A" },
+            { name: "Isabella Navarro", studentId: "2024-1008", program: "BSEE", yearLevel: "4th Year", section: "EE-4A" },
+            { name: "Jack Chua", studentId: "2024-1009", program: "BSEE", yearLevel: "3rd Year", section: "EE-3A" },
+            { name: "Kelly Dela Cruz", studentId: "2024-1010", program: "BSEE", yearLevel: "4th Year", section: "EE-4A" },
+            { name: "Leo Bautista", studentId: "2024-1011", program: "BSEE", yearLevel: "5th Year", section: "EE-5A" },
+            { name: "Mia Santiago", studentId: "2024-1012", program: "BSEE", yearLevel: "2nd Year", section: "EE-2A" },
+            { name: "Nathan Mendoza", studentId: "2024-1013", program: "BSEE", yearLevel: "3rd Year", section: "EE-3A" },
+            { name: "Olivia Ramos", studentId: "2024-1014", program: "BSEE", yearLevel: "3rd Year", section: "EE-3A" },
+            { name: "Peter Gomez", studentId: "2024-1015", program: "BSEE", yearLevel: "2nd Year", section: "EE-2A" },
+            { name: "Quinn Aguilar", studentId: "2024-1016", program: "BSEE", yearLevel: "3rd Year", section: "EE-3A" },
+            { name: "Rachel Villanueva", studentId: "2024-1017", program: "BSEE", yearLevel: "3rd Year", section: "EE-3A" },
+            { name: "Sam Torres", studentId: "2024-1018", program: "BSEE", yearLevel: "1st Year", section: "EE-1A" },
+            { name: "Tina Castillo", studentId: "2024-1019", program: "BSEE", yearLevel: "3rd Year", section: "EE-3A" },
+            { name: "Ulysses Castro", studentId: "2024-1020", program: "BSEE", yearLevel: "1st Year", section: "EE-1A" },
+            { name: "Victoria Tolentino", studentId: "2024-1021", program: "BSEE", yearLevel: "1st Year", section: "EE-1A" },
+            { name: "William Morales", studentId: "2024-1022", program: "BSEE", yearLevel: "3rd Year", section: "EE-3A" },
+            { name: "Xander Flores", studentId: "2024-1023", program: "BSEE", yearLevel: "5th Year", section: "EE-5A" },
+            { name: "Yara Perez", studentId: "2024-1024", program: "BSEE", yearLevel: "1st Year", section: "EE-1A" },
+            { name: "Zoe Mercado", studentId: "2024-1025", program: "BSEE", yearLevel: "1st Year", section: "EE-1A" },
+            { name: "Andrew Rivera", studentId: "2024-1026", program: "BSEE", yearLevel: "3rd Year", section: "EE-3A" },
+            { name: "Bianca Salazar", studentId: "2024-1027", program: "BSEE", yearLevel: "3rd Year", section: "EE-3A" },
+            { name: "Caleb Roxas", studentId: "2024-1028", program: "BSEE", yearLevel: "3rd Year", section: "EE-3A" },
+            { name: "Chloe Alcantara", studentId: "2024-1029", program: "BSEE", yearLevel: "1st Year", section: "EE-1A" },
+            { name: "David Ong", studentId: "2024-1030", program: "BSEE", yearLevel: "1st Year", section: "EE-1A" },
+            { name: "Eliana Go", studentId: "2024-1031", program: "BSEE", yearLevel: "4th Year", section: "EE-4A" },
+            { name: "Felix Romero", studentId: "2024-1032", program: "BSEE", yearLevel: "4th Year", section: "EE-4A" },
+            { name: "Gabriella Pineda", studentId: "2024-1033", program: "BSEE", yearLevel: "1st Year", section: "EE-1A" },
+            { name: "Harrison Ocampo", studentId: "2024-1034", program: "BSEE", yearLevel: "4th Year", section: "EE-4A" },
+            { name: "Ivy Miranda", studentId: "2024-1035", program: "BSEE", yearLevel: "2nd Year", section: "EE-2A" },
+            { name: "Julian Cruz", studentId: "2024-1036", program: "BSEE", yearLevel: "3rd Year", section: "EE-3A" },
+            { name: "Karen Fernandez", studentId: "2024-1037", program: "BSEE", yearLevel: "1st Year", section: "EE-1A" },
+            { name: "Liam Pascual", studentId: "2024-1038", program: "BSEE", yearLevel: "5th Year", section: "EE-5A" },
+            { name: "Maya Aguilar", studentId: "2024-1039", program: "BSEE", yearLevel: "5th Year", section: "EE-5A" },
+            { name: "Niko Bautista", studentId: "2024-1040", program: "BSEE", yearLevel: "2nd Year", section: "EE-2A" },
+            { name: "Oliver Santos", studentId: "2024-1041", program: "BSEE", yearLevel: "1st Year", section: "EE-1A" },
+            { name: "Penelope Ramos", studentId: "2024-1042", program: "BSEE", yearLevel: "5th Year", section: "EE-5A" },
+            { name: "Quincy Pineda", studentId: "2024-1043", program: "BSEE", yearLevel: "3rd Year", section: "EE-3A" },
+            { name: "Rowan Castro", studentId: "2024-1044", program: "BSEE", yearLevel: "4th Year", section: "EE-4A" },
+            { name: "Stella Vargas", studentId: "2024-1045", program: "BSEE", yearLevel: "2nd Year", section: "EE-2A" },
+            { name: "Thomas Go", studentId: "2024-1046", program: "BSEE", yearLevel: "1st Year", section: "EE-1A" },
+            { name: "Uma Bautista", studentId: "2024-1047", program: "BSEE", yearLevel: "1st Year", section: "EE-1A" },
+            { name: "Vera Tan", studentId: "2024-1048", program: "BSEE", yearLevel: "2nd Year", section: "EE-2A" },
+            { name: "Wyatt Reyes", studentId: "2024-1049", program: "BSEE", yearLevel: "1st Year", section: "EE-1A" }
+        ];
+
+        const sampleQuestions = [
+            { 
+                text: "What is the unit of electrical resistance?", 
+                category: "Electrical Circuits", 
+                type: "Objective",
+                options: ["Ampere", "Volt", "Ohm", "Watt"],
+                correctAnswer: "Ohm",
+                difficulty: "Easy"
+            },
+            { 
+                text: "Calculate the total resistance of two 10-ohm resistors in parallel.", 
+                category: "Electrical Circuits", 
+                type: "Computation",
+                options: ["5 ohms", "10 ohms", "20 ohms", "100 ohms"],
+                correctAnswer: "5 ohms",
+                difficulty: "Medium"
+            }
+        ];
+
+        // Security Helper
+        async function hashPassword(pass) {
+            const msgBuffer = new TextEncoder().encode(pass);
+            const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+        }
+
+        authBtn.addEventListener('click', async () => {
+            const password = document.getElementById('setup-password').value;
+            if (password.length < 6) { log("Password must be at least 6 characters."); return; }
+            authBtn.disabled = true;
+            log("Creating system accounts...");
+            const accounts = [
+                { email: "admin@catci.edu.ph", role: "admin", name: "System Administrator" },
+                { email: "teacher@catci.edu.ph", role: "teacher", name: "Lead Faculty", department: "Engineering (EE)" }
+            ];
+            for (const acc of accounts) {
+                try {
+                    log(`Registering ${acc.email}...`);
+                    const res = await createUserWithEmailAndPassword(auth, acc.email, password);
+                    log(`Setting role to '${acc.role}' in Firestore...`);
+                    const userData = {
+                        name: acc.name,
+                        email: acc.email,
+                        role: acc.role,
+                        passwordHash: await hashPassword(password),
+                        createdAt: serverTimestamp()
+                    };
+                    if (acc.role === "teacher") {
+                        userData.teacherId = "T2026-000"; 
+                        userData.department = acc.department;
+                    }
+                    await setDoc(doc(db, "users", res.user.uid), userData);
+                    log(`SUCCESS: ${acc.email} created.`);
+                } catch (err) {
+                    if (err.code === 'auth/email-already-in-use') {
+                        log(`Notice: ${acc.email} already exists in Auth. Please check Firestore roles.`);
+                    } else {
+                        log(`ERROR [${acc.email}]: ${err.message}`);
+                    }
+                }
+            }
+            authBtn.disabled = false;
+        });
+
+        runBtn.addEventListener('click', async () => {
+            runBtn.disabled = true;
+            logEl.textContent = "Starting initialization...";
+            try {
+                log("Creating 50 students...");
+                for (const student of sampleStudents) {
+                    await addDoc(collection(db, "students"), { ...student, createdAt: serverTimestamp() });
+                    log(`Added: ${student.name}`);
+                }
+                log("Initializing Question Bank...");
+                const importSessionId = "setup-session-" + Date.now();
+                const sessionRef = doc(db, "question_banks", importSessionId);
+                await setDoc(sessionRef, {
+                    subject: "Mathematics",
+                    sessionName: "Setup Sample Session",
+                    importedAt: serverTimestamp(),
+                    uploaderEmail: "system@pbec.edu"
+                });
+
+                for (const q of sampleQuestions) {
+                    await addDoc(collection(sessionRef, "questions"), { 
+                        ...q, 
+                        subject: "Mathematics",
+                        importSessionId,
+                        importedAt: serverTimestamp(),
+                        sessionName: "Setup Sample Session"
+                    });
+                    log(`Added Question: ${q.text.substring(0, 20)}...`);
+                }
+                log("Initializing Exams collection...");
+                await addDoc(collection(db, "exams"), { title: "Practice Exam #1", status: "draft", createdAt: serverTimestamp() });
+                log("--- SUCCESS ---");
+                log("Data initialization complete.");
+                document.getElementById('status').textContent = "Initialization Complete";
+                document.getElementById('status').style.background = "#c6f6d5";
+                document.getElementById('status').style.color = "#22543d";
+            } catch (err) {
+                log(`ERROR: ${err.message}`);
+                runBtn.disabled = false;
+            }
+        });
+
+        // Hide the global loading overlay from style.css
+        document.body.classList.add('loaded');
+    </script>
+</body>
+</html>

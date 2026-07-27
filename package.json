@@ -1,0 +1,17 @@
+{
+  "name": "pbec-web-portal",
+  "version": "1.0.0",
+  "description": "PreBoard Exam Checker Web Portal",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx serve .",
+    "dev": "npx serve .",
+    "serve": "npx serve ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "serve": "^14.2.4"
+  }
+}

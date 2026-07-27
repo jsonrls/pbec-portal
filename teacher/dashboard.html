@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PBEC — Dashboard</title>
+    <link rel="stylesheet" href="../css/style.css" />
+</head>
+
+<body>
+    <div class="app-shell">
+        <div id="sidebar-mount"></div>
+
+        <div class="main-content">
+            <header class="topbar">
+                <button class="btn btn-ghost btn-icon hamburger" id="hamburger">☰</button>
+                <div>
+                    <div class="topbar-title">Dashboard</div>
+                    <div class="topbar-subtitle">Overview of your exam system</div>
+                </div>
+            </header>
+
+            <main class="page-content">
+                <!-- Stat Cards -->
+                <div class="stat-grid" id="stat-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon teal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20"/><circle cx="9.5" cy="7.5" r="3.5"/><path d="M21 20v-1.5a4 4 0 0 0-3-3.87"/><path d="M16 4.3a3.5 3.5 0 0 1 0 6.4"/></svg></div>
+                        <div class="stat-info">
+                            <div class="stat-value" id="stat-students">—</div>
+                            <div class="stat-label">Total Students</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon blue"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 3H20v18H6.5A2.5 2.5 0 0 1 4 18.5v-13A2.5 2.5 0 0 1 6.5 3Z"/><path d="M8 7h8"/><path d="M8 11h6"/></svg></div>
+                        <div class="stat-info">
+                            <div class="stat-value" id="stat-questions">—</div>
+                            <div class="stat-label">Questions in Bank</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon yellow"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3v5h5"/><path d="M18 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8l6 6v10a2 2 0 0 1-2 2Z"/><path d="M8 13h8"/><path d="M8 17h5"/></svg></div>
+                        <div class="stat-info">
+                            <div class="stat-value" id="stat-exams">—</div>
+                            <div class="stat-label">Exams Generated</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon green"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg></div>
+                        <div class="stat-info">
+                            <div class="stat-value" id="stat-results">—</div>
+                            <div class="stat-label">Results Recorded</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="section-header">
+                    <h2>Quick Actions</h2>
+                </div>
+                <div class="action-grid">
+                    <a href="students.html" class="card action-card">
+                        <div class="stat-icon teal" style="width:40px;height:40px;font-size:18px;"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20"/><circle cx="9.5" cy="7.5" r="3.5"/><path d="M21 20v-1.5a4 4 0 0 0-3-3.87"/><path d="M16 4.3a3.5 3.5 0 0 1 0 6.4"/></svg></div>
+                        <div>
+                            <div class="action-card-title">Manage Students</div>
+                            <div class="action-card-copy">Add, edit or remove students</div>
+                        </div>
+                    </a>
+                    <a href="question-bank.html" class="card action-card">
+                        <div class="stat-icon blue" style="width:40px;height:40px;font-size:18px;"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 3H20v18H6.5A2.5 2.5 0 0 1 4 18.5v-13A2.5 2.5 0 0 1 6.5 3Z"/><path d="M8 7h8"/><path d="M8 11h6"/></svg></div>
+                        <div>
+                            <div class="action-card-title">Question Bank</div>
+                            <div class="action-card-copy">Upload and manage questions</div>
+                        </div>
+                    </a>
+                    <a href="exams.html" class="card action-card">
+                        <div class="stat-icon yellow" style="width:40px;height:40px;font-size:18px;"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3v5h5"/><path d="M18 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8l6 6v10a2 2 0 0 1-2 2Z"/><path d="M8 13h8"/><path d="M8 17h5"/></svg></div>
+                        <div>
+                            <div class="action-card-title">Generate Exam</div>
+                            <div class="action-card-copy">Create and manage exams</div>
+                        </div>
+                    </a>
+                    <a href="summary.html" class="card action-card">
+                        <div class="stat-icon green" style="width:40px;height:40px;font-size:18px;"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 16v-5"/><path d="M12 16V8"/><path d="M16 16v-3"/></svg></div>
+                        <div>
+                            <div class="action-card-title">View Summary</div>
+                            <div class="action-card-copy">Scores, stats and reports</div>
+                        </div>
+                    </a>
+                </div>
+
+                <!-- Recent Activity -->
+                <div class="section-header mb-16">
+                    <h2>Recent Students</h2>
+                    <a href="students.html" class="btn btn-secondary btn-sm">View all</a>
+                </div>
+                <div class="card">
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Student ID</th>
+                                    <th>Program</th>
+                                    <th>Year</th>
+                                    <th>Added</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recent-students">
+                                <tr>
+                                    <td colspan="5">
+                                        <div class="empty-state" style="padding:32px 0;">
+                                            <div class="empty-icon">👥</div>
+                                            <p>No students added yet</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <script type="module">
+        import { requireAuth, logout } from "../js/auth.js";
+        import { renderSidebar } from "../js/sidebar.js";
+        import { initSidebar, formatDate } from "../js/ui.js";
+        import { db } from "../js/firebase-config.js";
+        import {
+            collection, getCountFromServer, getDocs,
+            query, where, orderBy, limit, collectionGroup
+        } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+        const user = await requireAuth("teacher");
+
+        // Render sidebar
+        document.getElementById("sidebar-mount").innerHTML = renderSidebar("dashboard", user);
+        document.getElementById("user-email-display").textContent = user.name || user.email;
+        document.getElementById("user-avatar").textContent = (user.name || user.email)[0].toUpperCase();
+        document.getElementById("logout-btn").addEventListener("click", logout);
+        initSidebar();
+
+        // Load stats
+        function getTeacherOwnerKeys() {
+            return [user.teacherId, user.email, user.uid].filter(Boolean).map(String);
+        }
+
+        function isOwnedByCurrentTeacher(record = {}) {
+            const ownerKeys = getTeacherOwnerKeys();
+            return [
+                record.createdByEmail,
+                record.createdBy,
+                record.createdByUid,
+                record.uploadedByTeacherId,
+                record.uploadedByUid,
+                record.uploaderEmail,
+                record.teacherEmail
+            ].some(value => value && ownerKeys.includes(String(value)));
+        }
+
+        async function loadStats() {
+            try {
+                let studentsQ = collection(db, "students");
+                let resultsQ = collection(db, "examResults");
+                
+                if (user.role !== "admin") {
+                    resultsQ = query(resultsQ, where("teacherEmail", "==", user.email));
+                }
+
+                const [studentsResult, questionsResult, examsResult, resultsResult] = await Promise.allSettled([
+                    getCountFromServer(studentsQ),
+                    getDocs(query(collectionGroup(db, "questions"))), // Fetch to filter
+                    getDocs(collection(db, "exams")),
+                    getCountFromServer(resultsQ),
+                ]);
+
+                const questionDocs = questionsResult.status === "fulfilled" ? questionsResult.value.docs : [];
+                const examDocs = examsResult.status === "fulfilled" ? examsResult.value.docs : [];
+                const questionCount = user.role === "admin"
+                    ? questionDocs.length
+                    : questionDocs.filter(d => isOwnedByCurrentTeacher(d.data())).length;
+                const examCount = user.role === "admin"
+                    ? examDocs.length
+                    : examDocs.filter(d => isOwnedByCurrentTeacher(d.data())).length;
+
+                document.getElementById("stat-students").textContent = studentsResult.status === "fulfilled" ? studentsResult.value.data().count : 0;
+                document.getElementById("stat-questions").textContent = questionCount;
+                document.getElementById("stat-exams").textContent = examCount;
+                document.getElementById("stat-results").textContent = resultsResult.status === "fulfilled" ? resultsResult.value.data().count : 0;
+            } catch (e) {
+                console.error("Stats error:", e);
+            }
+        }
+
+        // Load recent students
+        async function loadRecentStudents() {
+            try {
+                const q = query(collection(db, "students"), orderBy("createdAt", "desc"), limit(5));
+                const snap = await getDocs(q);
+                const tbody = document.getElementById("recent-students");
+                if (snap.empty) return;
+                tbody.innerHTML = "";
+                snap.forEach(doc => {
+                    const s = doc.data();
+                    tbody.innerHTML += `
+          <tr>
+            <td class="fw-600">${s.name || "—"}</td>
+            <td><span class="badge badge-gray">${s.studentId || "—"}</span></td>
+            <td>${s.program || "—"}</td>
+            <td>${s.yearLevel || "—"}</td>
+            <td class="text-muted text-sm">${formatDate(s.createdAt)}</td>
+          </tr>
+        `;
+                });
+            } catch (e) {
+                console.error("Recent students error:", e);
+            }
+        }
+
+        loadStats();
+        loadRecentStudents();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PBEC — Audit Logs</title>
+    <link rel="stylesheet" href="../css/style.css" />
+</head>
+
+<body>
+    <div class="app-shell">
+        <div id="sidebar-mount"></div>
+
+        <div class="main-content">
+            <header class="topbar">
+                <button class="btn btn-ghost btn-icon hamburger" id="hamburger">☰</button>
+                <div style="flex:1;">
+                    <div class="topbar-title">Audit Logs</div>
+                    <div class="topbar-subtitle">Review administrative, teacher, and data-change activity</div>
+                </div>
+                <div class="topbar-actions">
+                    <button class="btn btn-secondary" id="btn-refresh">Refresh</button>
+                </div>
+            </header>
+
+            <main class="page-content">
+                <div class="stat-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon blue"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg></div>
+                        <div class="stat-info">
+                            <div class="stat-value" id="stat-logs">0</div>
+                            <div class="stat-label">Recent Events</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon teal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-5"/></svg></div>
+                        <div class="stat-info">
+                            <div class="stat-value" id="stat-admin">0</div>
+                            <div class="stat-label">Admin Actions</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon yellow"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20"/><circle cx="9.5" cy="7.5" r="3.5"/><path d="M21 20v-1.5a4 4 0 0 0-3-3.87"/><path d="M16 4.3a3.5 3.5 0 0 1 0 6.4"/></svg></div>
+                        <div class="stat-info">
+                            <div class="stat-value" id="stat-teacher">0</div>
+                            <div class="stat-label">Teacher Actions</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-body">
+                        <div class="toolbar" style="margin-bottom:0;">
+                            <div class="search-box">
+                                <span class="search-icon">🔍</span>
+                                <input class="form-control" type="search" id="search-input" placeholder="Search logs..." />
+                            </div>
+                            <select class="form-control" id="filter-role" style="max-width:180px;">
+                                <option value="">All Roles</option>
+                                <option value="admin">Admin</option>
+                                <option value="teacher">Teacher</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mt-16">
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>User</th>
+                                    <th>Role</th>
+                                    <th>Action</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody id="logs-tbody">
+                                <tr><td colspan="5"><div class="spinner" style="margin:24px auto;"></div></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <script type="module">
+        import { requireAuth, logout } from "../js/auth.js";
+        import { renderSidebar } from "../js/sidebar.js";
+        import { initSidebar, formatDateTime, debounce } from "../js/ui.js";
+        import { db } from "../js/firebase-config.js";
+        import {
+            collection, getDocs, query, orderBy, limit
+        } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+        const user = await requireAuth("admin");
+        document.getElementById("sidebar-mount").innerHTML = renderSidebar("logs", user);
+        document.getElementById("user-email-display").textContent = user.name || user.email;
+        document.getElementById("user-avatar").textContent = (user.name || user.email)[0].toUpperCase();
+        document.getElementById("logout-btn").addEventListener("click", logout);
+        initSidebar();
+
+        let logs = [];
+
+        async function loadLogs() {
+            const snap = await getDocs(query(collection(db, "audit_logs"), orderBy("timestamp", "desc"), limit(200)));
+            logs = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+            renderStats();
+            renderLogs();
+        }
+
+        function renderStats() {
+            document.getElementById("stat-logs").textContent = logs.length;
+            document.getElementById("stat-admin").textContent = logs.filter(l => l.userRole === "admin").length;
+            document.getElementById("stat-teacher").textContent = logs.filter(l => l.userRole === "teacher").length;
+        }
+
+        function renderLogs() {
+            const search = document.getElementById("search-input").value.toLowerCase();
+            const role = document.getElementById("filter-role").value;
+            const filtered = logs.filter(l => {
+                const text = `${l.userName || ""} ${l.action || ""} ${l.description || ""}`.toLowerCase();
+                return (!search || text.includes(search)) && (!role || l.userRole === role);
+            });
+
+            const tbody = document.getElementById("logs-tbody");
+            if (!filtered.length) {
+                tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state" style="padding:28px;"><h4>No audit logs found</h4></div></td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(l => `
+                <tr>
+                    <td class="text-muted text-sm">${formatDateTime(l.timestamp)}</td>
+                    <td class="fw-600">${l.userName || "—"}</td>
+                    <td><span class="badge ${l.userRole === "admin" ? "badge-teal" : "badge-blue"}">${l.userRole || "—"}</span></td>
+                    <td><span class="badge badge-gray">${l.action || "—"}</span></td>
+                    <td class="text-sm">${l.description || "—"}</td>
+                </tr>
+            `).join("");
+        }
+
+        document.getElementById("search-input").addEventListener("input", debounce(renderLogs, 200));
+        document.getElementById("filter-role").addEventListener("change", renderLogs);
+        document.getElementById("btn-refresh").addEventListener("click", loadLogs);
+
+        loadLogs();
+    </script>
+</body>
+
+</html>

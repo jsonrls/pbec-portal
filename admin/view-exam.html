@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PBEC — View Exam</title>
+    <link rel="stylesheet" href="../css/style.css" />
+    <style>
+        .exam-header-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .question-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-bottom: 16px;
+            position: relative;
+        }
+
+        .question-meta {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .question-text {
+            font-size: 16px;
+            line-height: 1.6;
+            margin-bottom: 16px;
+            font-weight: 500;
+        }
+
+        .options-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .option-box {
+            padding: 12px 16px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: var(--bg-dim);
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .option-box.correct {
+            border-color: var(--success);
+            background: rgba(46, 160, 67, 0.1);
+            color: var(--success);
+        }
+
+        .option-letter {
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .correct .option-letter {
+            color: var(--success);
+        }
+
+        /* Pagination Styles */
+        .pagination-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            margin-top: 24px;
+            padding: 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+        }
+
+        .page-info {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .hidden-on-screen {
+            display: none !important;
+        }
+
+        .print-header {
+            display: none;
+        }
+
+        .print-only-inline {
+            display: none;
+        }
+
+        @media print {
+            @page {
+                size: 8.5in 11in;
+                margin: 0.5in;
+            }
+            .app-shell .sidebar, .topbar, .topbar-actions, .no-print, .pagination-controls, .exam-header-card {
+                display: none !important;
+            }
+            .app-shell { display: block; }
+            .main-content { margin-left: 0; padding: 0; width: 100% !important; }
+            
+            .print-only-inline {
+                display: inline !important;
+            }
+
+            .print-header {
+                display: block !important;
+                margin-bottom: 20px;
+                text-align: center;
+            }
+            .print-exam-title {
+                font-weight: bold;
+                font-size: 14pt;
+                margin-bottom: 20px;
+                text-transform: uppercase;
+            }
+            .print-instructions {
+                text-align: left;
+                margin-bottom: 20px;
+                font-size: 10pt;
+                line-height: 1.4;
+                border-bottom: 1px solid #000;
+                padding-bottom: 15px;
+            }
+            .print-multiple-choice {
+                text-align: left;
+                font-style: italic;
+                margin-bottom: 15px;
+                font-size: 10pt;
+            }
+
+            .question-item { 
+                break-inside: avoid; 
+                border: none !important; 
+                margin-bottom: 15px !important;
+                padding: 0 !important;
+                background: #fff !important;
+                color: #000 !important;
+                display: flex !important;
+                gap: 8px;
+                align-items: flex-start;
+            }
+            .question-num {
+                font-weight: bold;
+                min-width: 25px;
+            }
+            .question-content {
+                flex: 1;
+            }
+            .question-text {
+                font-size: 11pt !important;
+                line-height: 1.25 !important;
+                color: #000 !important;
+                margin-bottom: 8px !important;
+                font-weight: normal !important;
+            }
+            .options-grid { 
+                display: flex !important;
+                flex-wrap: wrap !important;
+                gap: 4px 40px !important;
+                margin-left: 10px !important;
+            }
+            .option-box { 
+                border: none !important; 
+                background: #fff !important; 
+                color: #000 !important;
+                font-size: 11pt !important;
+                line-height: 1.25 !important;
+                padding: 0 !important;
+                min-width: calc(25% - 40px); /* Tries to fit 4 if short, or drops to 2/1 */
+                display: flex !important;
+                gap: 6px !important;
+            }
+            .option-letter { 
+                font-weight: normal !important;
+                color: #000 !important;
+            }
+            .option-box.correct { 
+                text-decoration: underline !important;
+                font-weight: bold !important;
+            }
+            .badge, .question-meta { display: none !important; }
+            body { background: #fff !important; color: #000 !important; font-size: 11pt !important; line-height: 1.25 !important; }
+            
+            /* Show all questions on print even if paginated on screen */
+            #questions-list .question-item {
+                display: flex !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-shell">
+        <div id="sidebar-mount"></div>
+
+        <div class="main-content">
+            <header class="topbar no-print">
+                <button class="btn btn-ghost btn-icon hamburger" id="hamburger">☰</button>
+                <div style="flex:1;">
+                    <div class="topbar-title">View Full Exam</div>
+                    <div class="topbar-subtitle" id="exam-subtitle-top">Review all questions</div>
+                </div>
+                <div class="topbar-actions">
+                    <button class="btn btn-secondary" onclick="window.print()">🖨️ Print Exam</button>
+                    <a href="exams.html" class="btn btn-ghost">Back to List</a>
+                </div>
+            </header>
+
+            <main class="page-content">
+                <div id="exam-loading" class="flex-center" style="padding:100px;">
+                    <div class="spinner"></div>
+                </div>
+
+                <div id="exam-content" class="hidden">
+                    <!-- Print Header -->
+                    <div class="print-header">
+                        <div class="print-exam-title" id="print-header-title">ENGINEERING SCIENCES AND ALLIED SUBJECTS</div>
+                        <div class="print-instructions">
+                            <strong>Instruction:</strong> Select the correct answer for each of the following questions. Mark only one answer for each item by shading the box corresponding to the letter of your choice on the answer sheet provided.
+                        </div>
+                        <div class="print-multiple-choice">Multiple Choice</div>
+                    </div>
+
+                    <div class="exam-header-card no-print">
+                        <div>
+                            <h2 id="view-exam-title" style="margin:0 0 8px 0;">—</h2>
+                            <div class="flex gap-12 align-center">
+                                <span class="badge badge-teal" id="view-subject">—</span>
+                                <span class="badge badge-blue" id="view-count">— Questions</span>
+                                <span class="text-xs text-muted" id="view-date">—</span>
+                            </div>
+                        </div>
+                        <div class="no-print">
+                            <button class="btn btn-outline btn-sm" id="btn-shuffle-reveal">Toggle Answers</button>
+                        </div>
+                    </div>
+
+                    <div id="questions-list">
+                        <!-- Questions will be rendered here -->
+                    </div>
+
+                    <div class="pagination-controls no-print" id="pagination-container">
+                        <button class="btn btn-secondary btn-sm" id="btn-prev">Previous</button>
+                        <span class="page-info" id="page-display">Page 1 of 1</span>
+                        <button class="btn btn-secondary btn-sm" id="btn-next">Next</button>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <script type="module">
+        import { requireAuth, logout } from "../js/auth.js";
+        import { renderSidebar } from "../js/sidebar.js";
+        import { initSidebar, showToast, formatDateTime } from "../js/ui.js";
+        import { db } from "../js/firebase-config.js";
+        import {
+            collection, getDoc, getDocs, doc, collectionGroup, query, where
+        } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+        const user = await requireAuth("admin");
+        document.getElementById("sidebar-mount").innerHTML = renderSidebar("exams", user);
+        document.getElementById("user-email-display").textContent = user.name || user.email;
+        document.getElementById("user-avatar").textContent = (user.name || user.email)[0].toUpperCase();
+        document.getElementById("logout-btn").addEventListener("click", logout);
+        initSidebar();
+
+        const urlParams = new URLSearchParams(window.location.search);
+        let examId = urlParams.get('id');
+        
+        console.log("Full Current URL:", window.location.href);
+        console.log("Search Parameters:", window.location.search);
+        console.log("Detected examId from URLSearchParams:", examId);
+
+        // Fallback for cases where URLSearchParams might fail or clean URLs strip params weirdly
+        if (!examId && window.location.search.includes('id=')) {
+            examId = window.location.search.split('id=')[1]?.split('&')[0];
+            console.log("Exam ID found via manual fallback:", examId);
+        }
+
+        if (!examId || examId === "undefined" || examId === "null" || examId === "") {
+            const errorMsg = `No valid exam ID provided (Received: ${examId}). 
+            URL: ${window.location.pathname}${window.location.search}`;
+            console.error(errorMsg);
+            showToast(errorMsg, "error");
+            setTimeout(() => window.location.href = "exams.html", 6000);
+        } else {
+            loadExam();
+        }
+
+        let showAnswers = true;
+        let currentPage = 1;
+        const qPerPage = 10;
+        let allQIds = [];
+        let globalQMap = {};
+
+        function escapeHtml(value) {
+            return String(value ?? "")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#39;");
+        }
+
+        function formatExamText(value) {
+            return escapeHtml(value).replace(/\n/g, "<br>");
+        }
+
+        async function loadExam() {
+            try {
+                console.log("Attempting to load exam with ID:", examId);
+                let examDoc = await getDoc(doc(db, "exams", examId));
+                let examData = null;
+                let actualId = examId;
+
+                if (examDoc.exists()) {
+                    examData = examDoc.data();
+                    console.log("Found exam by Firestore Document ID");
+                } else {
+                    console.log("Document ID lookup failed, searching for 'id' field...");
+                    // Try numeric ID fallback
+                    const numericId = Number(examId);
+                    if (!isNaN(numericId)) {
+                        const q = query(collection(db, "exams"), where("id", "==", numericId));
+                        const snap = await getDocs(q);
+                        if (!snap.empty) {
+                            examDoc = snap.docs[0];
+                            examData = examDoc.data();
+                            actualId = examDoc.id;
+                            console.log("Found exam by numeric 'id' field. Document ID is:", actualId);
+                        }
+                    }
+                }
+
+                if (!examData) {
+                    const errorMsg = `Exam not found. (Tried ID: ${examId})`;
+                    console.error(errorMsg);
+                    showToast(errorMsg, "error");
+                    setTimeout(() => window.location.href = "exams.html", 4000);
+                    return;
+                }
+                console.log("Exam Data Loaded:", examData);
+
+                function getInferredSubject(data) {
+                    if (data.subject) return data.subject;
+                    const name = (data.examName || "").toLowerCase();
+                    if (name.includes("math")) return "Mathematics";
+                    if (name.includes("esas")) return "ESAS";
+                    if (name.includes("prof") || name.includes("ee")) return "Professional EE";
+                    return null;
+                }
+
+                const inferredSubject = getInferredSubject(examData);
+                document.getElementById("view-exam-title").textContent = examData.examName || "Unnamed Exam";
+                document.getElementById("view-subject").textContent = inferredSubject || "Subject Not Specified";
+                document.getElementById("print-header-title").textContent = inferredSubject || examData.examName || "Unnamed Exam";
+                
+                // Handle different question ID field names
+                allQIds = examData.questionIds || examData.setAQuestionIds || [];
+                document.getElementById("view-count").textContent = `${allQIds.length} Questions`;
+                
+                // Handle different date formats
+                let dateStr = "—";
+                if (examData.createdAt) {
+                    if (typeof examData.createdAt === 'number') {
+                        dateStr = new Date(examData.createdAt).toLocaleString();
+                    } else {
+                        dateStr = formatDateTime(examData.createdAt);
+                    }
+                }
+                document.getElementById("view-date").textContent = "Created: " + dateStr;
+
+                // Fetch questions
+                if (allQIds.length === 0) {
+                    document.getElementById("questions-list").innerHTML = '<div class="empty-state"><p>No questions in this exam.</p></div>';
+                    document.getElementById("pagination-container").classList.add("hidden");
+                    document.getElementById("exam-loading").classList.add("hidden");
+                    document.getElementById("exam-content").classList.remove("hidden");
+                    return;
+                }
+
+                // Batch fetch questions using collectionGroup
+                globalQMap = {};
+                const qQuery = collectionGroup(db, "questions");
+                const qSnap = await getDocs(qQuery);
+                qSnap.forEach(d => { 
+                    const data = d.data();
+                    globalQMap[d.id] = data; 
+                    if (data.id) globalQMap[data.id] = data; // Fallback for custom id fields
+                });
+
+                renderQuestions();
+                document.getElementById("exam-loading").classList.add("hidden");
+                document.getElementById("exam-content").classList.remove("hidden");
+                updatePaginationControls();
+
+            } catch (err) {
+                console.error(err);
+                showToast("Error loading exam: " + err.message, "error");
+            }
+        }
+
+        function renderQuestions() {
+            const container = document.getElementById("questions-list");
+            const start = (currentPage - 1) * qPerPage;
+            const end = start + qPerPage;
+
+            container.innerHTML = allQIds.map((qid, index) => {
+                const q = globalQMap[qid];
+                const isVisible = index >= start && index < end;
+                const qNum = index + 1;
+                
+                if (!q) return `<div class="question-item ${!isVisible ? 'hidden-on-screen' : ''}">
+                    <div class="question-num">${qNum}.</div>
+                    <div class="question-content"><p class="text-muted">Question ${qNum} not found (ID: ${qid})</p></div>
+                </div>`;
+
+                const options = [
+                    { label: 'A', text: q.optionA },
+                    { label: 'B', text: q.optionB },
+                    { label: 'C', text: q.optionC },
+                    { label: 'D', text: q.optionD }
+                ];
+
+                return `
+                    <div class="question-item ${!isVisible ? 'hidden-on-screen' : ''}">
+                        <div class="question-num no-print">#${qNum}</div>
+                        <div class="question-num print-only-inline">${qNum}.</div>
+                        <div class="question-content">
+                            <div class="question-meta no-print">
+                                <span class="badge badge-gray">${escapeHtml(q.topic || 'General')}</span>
+                                <span class="badge badge-gray">${escapeHtml(q.category || 'Objective')}</span>
+                            </div>
+                            <div class="question-text">${formatExamText(q.questionText)}</div>
+                            <div class="options-grid">
+                                ${options.map(opt => `
+                                    <div class="option-box ${showAnswers && q.correctAnswer === opt.label ? 'correct' : ''}">
+                                        <span class="option-letter">${opt.label}.</span>
+                                        <span>${formatExamText(opt.text)}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join("");
+        }
+
+        function updatePaginationControls() {
+            const totalPages = Math.ceil(allQIds.length / qPerPage);
+            document.getElementById("page-display").textContent = `Page ${currentPage} of ${totalPages || 1}`;
+            document.getElementById("btn-prev").disabled = currentPage === 1;
+            document.getElementById("btn-next").disabled = currentPage === totalPages || totalPages === 0;
+            
+            if (totalPages <= 1) {
+                document.getElementById("pagination-container").classList.add("hidden");
+            } else {
+                document.getElementById("pagination-container").classList.remove("hidden");
+            }
+        }
+
+        document.getElementById("btn-prev").addEventListener("click", () => {
+            if (currentPage > 1) {
+                currentPage--;
+                renderQuestions();
+                updatePaginationControls();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        });
+
+        document.getElementById("btn-next").addEventListener("click", () => {
+            const totalPages = Math.ceil(allQIds.length / qPerPage);
+            if (currentPage < totalPages) {
+                currentPage++;
+                renderQuestions();
+                updatePaginationControls();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        });
+
+        document.getElementById("btn-shuffle-reveal").addEventListener("click", () => {
+            showAnswers = !showAnswers;
+            renderQuestions();
+        });
+    </script>
+</body>
+
+</html>

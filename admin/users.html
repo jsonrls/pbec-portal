@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PBEC — User Management</title>
+    <link rel="stylesheet" href="../css/style.css" />
+</head>
+
+<body>
+    <div class="app-shell">
+        <div id="sidebar-mount"></div>
+
+        <div class="main-content">
+            <header class="topbar">
+                <button class="btn btn-ghost btn-icon hamburger" id="hamburger" aria-label="Toggle navigation">
+                    <span data-lucide-icon="menu"></span>
+                </button>
+                <div style="flex:1;">
+                    <div class="topbar-title">Users</div>
+                    <div class="topbar-subtitle">Manage portal access and roles</div>
+                </div>
+            </header>
+
+            <main class="page-content">
+                <!-- Summary Cards -->
+                <div class="stat-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon teal" data-lucide-icon="users"></div>
+                        <div class="stat-info">
+                            <div class="stat-value" id="stat-total">0</div>
+                            <div class="stat-label">Total Users</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon green" data-lucide-icon="user-check"></div>
+                        <div class="stat-info">
+                            <div class="stat-value" id="stat-active">0</div>
+                            <div class="stat-label">Active Teachers</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon yellow" data-lucide-icon="clock"></div>
+                        <div class="stat-info">
+                            <div class="stat-value" id="stat-pending">0</div>
+                            <div class="stat-label">Pending Activation</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon red" data-lucide-icon="user-x"></div>
+                        <div class="stat-info">
+                            <div class="stat-value" id="stat-inactive">0</div>
+                            <div class="stat-label">Inactive</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-bottom: 20px;">
+                    <div class="card-body">
+                        <div class="toolbar" style="margin-bottom: 20px;">
+                            <div class="search-box" style="flex: 2;">
+                                <span class="search-icon" data-lucide-icon="search"></span>
+                                <input class="form-control" type="search" id="search-input" placeholder="Search by name, email, or Teacher ID…" />
+                            </div>
+                            <button class="btn btn-primary" id="open-add-modal" style="margin-left: 12px;">
+                                <span data-lucide-icon="plus"></span>
+                                Add Teacher
+                            </button>
+                        </div>
+
+                        <div class="filter-row" style="display: flex; gap: 12px; flex-wrap: wrap;">
+                            <div class="form-group" style="flex: 1; min-width: 150px; margin-bottom: 0;">
+                                <label class="text-xs">Role</label>
+                                <select class="form-control form-control-sm" id="filter-role">
+                                    <option value="">All Roles</option>
+                                    <option value="admin">Admin</option>
+                                    <option value="teacher">Teacher</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="flex: 1; min-width: 150px; margin-bottom: 0;">
+                                <label class="text-xs">Status</label>
+                                <select class="form-control form-control-sm" id="filter-status">
+                                    <option value="">All Status</option>
+                                    <option value="active">Active</option>
+                                    <option value="pending">Pending</option>
+                                    <option value="inactive">Inactive</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="flex: 1; min-width: 180px; margin-bottom: 0;">
+                                <label class="text-xs">School / Department</label>
+                                <select class="form-control form-control-sm" id="filter-dept">
+                                    <option value="">All Schools</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="flex: 1; min-width: 150px; margin-bottom: 0;">
+                                <label class="text-xs">Joined Date Range</label>
+                                <input type="date" class="form-control form-control-sm" id="filter-date-start" title="Start Date">
+                            </div>
+                            <div class="form-group" style="display: flex; align-items: flex-end; margin-bottom: 0;">
+                                <button class="btn btn-secondary btn-sm" id="reset-filters">Reset</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Full Name / Email</th>
+                                    <th>Teacher ID</th>
+                                    <th>School / Dept</th>
+                                    <th>Role</th>
+                                    <th>Status</th>
+                                    <th>Deadline</th>
+                                    <th>Registered</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-tbody">
+                                <tr>
+                                    <td colspan="8">
+                                        <div class="spinner text-center" style="margin:20px auto;"></div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Add User Modal -->
+    <div id="add-user-modal" class="modal-overlay hidden">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modal-title">Create New Teacher Account</h3>
+                <button class="modal-close" id="close-add-modal">&times;</button>
+            </div>
+            <form id="add-user-form">
+                <input type="hidden" id="edit-user-id" value="">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="new-name">Full Name</label>
+                        <input class="form-control" type="text" id="new-name" placeholder="Juan Dela Cruz" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="new-school">School / Institution</label>
+                        <select class="form-control" id="new-school" required>
+                            <option value="">— Select School —</option>
+                            <option>College of Engineering</option>
+                            <option>College of IT & Computer Studies</option>
+                            <option>College of Arts & Sciences</option>
+                            <option>College of Business & Education</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="new-dept">Position / Department</label>
+                        <input class="form-control" type="text" id="new-dept" placeholder="E.g. EE Department Head" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Teacher ID</label>
+                        <div class="input-group">
+                            <span class="input-prefix">T</span>
+                            <input class="form-control" id="new-tid-serial" placeholder="2026-001" required>
+                        </div>
+                        <p class="text-xs text-muted" style="margin-top:4px;">Unique ID across the year (Series: TYYYY-XXX)</p>
+                    </div>
+                    <div class="form-group">
+                        <label for="new-email">Email address</label>
+                        <input class="form-control" type="email" id="new-email" placeholder="teacher@catci.edu.ph" required autocomplete="email">
+                    </div>
+                    <div class="form-group">
+                        <label>Initial Status</label>
+                        <div class="flex gap-12">
+                            <label class="flex gap-4" style="align-items:center; cursor:pointer;">
+                                <input type="radio" name="new-status" value="pending" checked> <span class="text-sm">Pending Approval</span>
+                            </label>
+                            <label class="flex gap-4" style="align-items:center; cursor:pointer;">
+                                <input type="radio" name="new-status" value="active"> <span class="text-sm">Active Now</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Password (Auto-generated)</label>
+                        <div style="padding:10px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);font-size:13px;color:var(--text-muted);">
+                            Default password rule: <strong>TYYYY-SEQ</strong> &rarr; <strong>TYYSEQ</strong> <br/>
+                            Example: <strong>T2026-001</strong> &rarr; <strong>T26001</strong>
+                        </div>
+                    </div>
+                    <div id="password-hint-box">
+                        <p class="text-muted text-xs">Note: Teacher accounts are created as <strong>Teacher</strong> role by default.</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="cancel-add">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="save-user-btn">Create Account</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <script type="module">
+        import { requireAuth, logout } from "../js/auth.js";
+        import { renderSidebar } from "../js/sidebar.js";
+        import { initSidebar, showToast, showConfirm, openModal, closeModal, setButtonLoading, formatDate, formatDateTime, debounce } from "../js/ui.js";
+        import { logActivity } from "../js/audit.js";
+        import { lucideIcon } from "../js/lucide-icons.js";
+        import { db, auth } from "../js/firebase-config.js";
+        import { createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+        import {
+            collection, getDocs, doc, updateDoc, setDoc, deleteDoc, serverTimestamp,
+            query, orderBy, onSnapshot, where, addDoc
+        } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+        const currentUser = await requireAuth("admin");
+        document.getElementById("sidebar-mount").innerHTML = renderSidebar("users", currentUser);
+        document.querySelectorAll("[data-lucide-icon]").forEach((node) => {
+            node.innerHTML = lucideIcon(node.dataset.lucideIcon);
+        });
+        document.getElementById("user-email-display").textContent = currentUser.name || currentUser.email;
+        document.getElementById("user-avatar").textContent = (currentUser.name || currentUser.email)[0].toUpperCase();
+        document.getElementById("logout-btn").addEventListener("click", logout);
+        initSidebar();
+
+        // ─── Audit Trail Helper ────────────────────────────────────
+        // Local wrapper for compatibility
+        async function logAdminAction(action, targetUser) {
+            await logActivity(currentUser, action, `${action} for ${targetUser.name || targetUser.email}`, {
+                targetId: targetUser._id,
+                targetEmail: targetUser.email,
+                targetName: targetUser.name
+            });
+        }
+
+        // Security Helper: SHA-256 Hashing
+        async function hashPassword(password) {
+            const msgBuffer = new TextEncoder().encode(password);
+            const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+        }
+
+        let allUsers = [];
+
+        // Real-time listener on users collection
+        const q = query(collection(db, "users"));
+        onSnapshot(q, (snap) => {
+            allUsers = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+            allUsers.sort((a, b) => {
+                const tA = (a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt ? new Date(a.createdAt).getTime() : 0));
+                const tB = (b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt ? new Date(b.createdAt).getTime() : 0));
+                return tB - tA;
+            });
+            updateStats();
+            populateSchoolFilter();
+            renderTable();
+        }, (err) => {
+            console.error("Firestore error:", err);
+            document.getElementById("users-tbody").innerHTML = `<tr><td colspan="8" class="text-center" style="color:var(--danger);padding:24px;">Firebase Error: ${err.message}</td></tr>`;
+        });
+
+        function updateStats() {
+            const total = allUsers.length;
+            const active = allUsers.filter(u => u.status === "active").length;
+            const pending = allUsers.filter(u => u.status === "pending" || !u.status).length;
+            const inactive = allUsers.filter(u => u.status === "inactive").length;
+
+            document.getElementById("stat-total").textContent = total;
+            document.getElementById("stat-active").textContent = active;
+            document.getElementById("stat-pending").textContent = pending;
+            document.getElementById("stat-inactive").textContent = inactive;
+        }
+
+        function populateSchoolFilter() {
+            const filterDept = document.getElementById("filter-dept");
+            const schools = [...new Set(allUsers.map(u => u.school).filter(Boolean))].sort();
+            const currentVal = filterDept.value;
+            
+            filterDept.innerHTML = '<option value="">All Schools</option>';
+            schools.forEach(s => {
+                const opt = document.createElement("option");
+                opt.value = s;
+                opt.textContent = s;
+                filterDept.appendChild(opt);
+            });
+            filterDept.value = currentVal;
+        }
+
+        function renderTable() {
+            const searchVal = document.getElementById("search-input").value.toLowerCase();
+            const roleVal = document.getElementById("filter-role").value;
+            const statusVal = document.getElementById("filter-status").value;
+            const schoolVal = document.getElementById("filter-dept").value;
+            const dateVal = document.getElementById("filter-date-start").value;
+
+            const filtered = allUsers.filter(u => {
+                const matchesSearch = !searchVal || 
+                    u.name?.toLowerCase().includes(searchVal) || 
+                    u.email?.toLowerCase().includes(searchVal) || 
+                    u.teacherId?.toLowerCase().includes(searchVal);
+                
+                const matchesRole = !roleVal || u.role === roleVal;
+                const matchesStatus = !statusVal || (u.status || "pending") === statusVal;
+                const matchesSchool = !schoolVal || u.school === schoolVal;
+                
+                let matchesDate = true;
+                if (dateVal) {
+                    const start = new Date(dateVal).getTime();
+                    const created = u.createdAt?.toMillis ? u.createdAt.toMillis() : (u.createdAt ? new Date(u.createdAt).getTime() : 0);
+                    matchesDate = created >= start;
+                }
+
+                return matchesSearch && matchesRole && matchesStatus && matchesSchool && matchesDate;
+            });
+
+            const tbody = document.getElementById("users-tbody");
+
+            if (!filtered.length) {
+                tbody.innerHTML = `<tr><td colspan="8">
+          <div class="empty-state">
+            <div class="empty-icon">${lucideIcon("search")}</div>
+            <h4>No users found</h4>
+            <p>Try a different search or filter</p>
+          </div>
+        </td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(u => {
+                const isMe = u._id === currentUser.uid;
+                const status = u.status || "pending";
+                
+                let statusBadge = "";
+                if (status === "active") statusBadge = `<span class="badge badge-green">Active</span>`;
+                else if (status === "inactive") statusBadge = `<span class="badge badge-red">Inactive</span>`;
+                else statusBadge = `<span class="badge badge-yellow">Pending</span>`;
+
+                const roleBadge = u.role === "admin"
+                    ? `<span class="badge badge-teal">Admin</span>`
+                    : `<span class="badge badge-blue">Teacher</span>`;
+
+                // Deadline logic
+                let deadlineHtml = "—";
+                if (status === "pending" && u.activationDeadline) {
+                    const deadline = u.activationDeadline.toMillis ? u.activationDeadline.toMillis() : new Date(u.activationDeadline).getTime();
+                    const now = Date.now();
+                    const diff = deadline - now;
+                    const daysLeft = Math.ceil(diff / (1000 * 60 * 60 * 24));
+                    
+                    if (daysLeft < 0) {
+                        deadlineHtml = `<span class="badge badge-red" title="Past Due: ${formatDate(u.activationDeadline)}">Overdue</span>`;
+                    } else if (daysLeft <= 2) {
+                        deadlineHtml = `<span class="badge badge-yellow" title="Deadline: ${formatDate(u.activationDeadline)}">${daysLeft}d left</span>`;
+                    } else {
+                        deadlineHtml = `<span class="text-xs text-muted">${formatDate(u.activationDeadline)}</span>`;
+                    }
+                }
+
+                // Actions
+                const editBtn = `<button class="btn btn-ghost btn-sm btn-icon" onclick="editUser('${u._id}')" title="Edit Profile" aria-label="Edit Profile">${lucideIcon("pencil")}</button>`;
+                const deleteBtn = isMe ? "" : `<button class="btn btn-ghost btn-sm btn-icon text-danger" onclick="deleteUser('${u._id}', '${(u.name || "User").replace(/'/g, "\\'")}')" title="Delete Profile" aria-label="Delete Profile">${lucideIcon("trash-2")}</button>`;
+                
+                let workflowBtn = "";
+                if (status === "pending" || status === "inactive") {
+                    workflowBtn = `<button class="btn btn-ghost btn-sm btn-icon" style="color:var(--success);" onclick="approveUser('${u._id}')" title="Approve / Activate" aria-label="Approve / Activate">${lucideIcon("check")}</button>`;
+                } else if (status === "active" && !isMe) {
+                    workflowBtn = `<button class="btn btn-ghost btn-sm btn-icon" style="color:var(--warning);" onclick="deactivateUser('${u._id}')" title="Deactivate" aria-label="Deactivate">${lucideIcon("ban")}</button>`;
+                }
+
+                const resetBtn = `<button class="btn btn-ghost btn-sm btn-icon" onclick="resetPassword('${u._id}')" title="Reset to Default Password" aria-label="Reset to Default Password">${lucideIcon("key-round")}</button>`;
+
+                return `
+        <tr>
+          <td>
+            <div class="flex gap-8" style="align-items:center;">
+              <div style="width:32px;height:32px;border-radius:50%;background:var(--accent-dim);color:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0;">
+                ${(u.name || u.email || "?")[0].toUpperCase()}
+              </div>
+              <div>
+                <div class="fw-600">${u.name || "Unnamed"} ${isMe ? "<span class='text-muted text-xs'>(You)</span>" : ""}</div>
+                <div class="text-xs text-muted">${u.email || "No Email"}</div>
+              </div>
+            </div>
+          </td>
+          <td><span class="${u.teacherId ? 'badge badge-gray' : 'text-muted'}">${u.teacherId || "—"}</span></td>
+          <td class="text-sm">
+            <div class="fw-500">${u.school || "—"}</div>
+            <div class="text-xs text-muted">${u.department || "—"}</div>
+          </td>
+          <td>${roleBadge}</td>
+          <td>${statusBadge}</td>
+          <td>${deadlineHtml}</td>
+          <td class="text-muted text-sm">${formatDate(u.createdAt)}</td>
+          <td>
+            <div class="td-actions">
+              ${workflowBtn}
+              ${editBtn}
+              ${resetBtn}
+              ${deleteBtn}
+            </div>
+          </td>
+        </tr>
+      `}).join("");
+        }
+
+        // Listeners for filters
+        document.getElementById("search-input").addEventListener("input", debounce(renderTable, 250));
+        document.getElementById("filter-role").addEventListener("change", renderTable);
+        document.getElementById("filter-status").addEventListener("change", renderTable);
+        document.getElementById("filter-dept").addEventListener("change", renderTable);
+        document.getElementById("filter-date-start").addEventListener("input", renderTable);
+        document.getElementById("reset-filters").addEventListener("click", () => {
+            document.getElementById("search-input").value = "";
+            document.getElementById("filter-role").value = "";
+            document.getElementById("filter-status").value = "";
+            document.getElementById("filter-dept").value = "";
+            document.getElementById("filter-date-start").value = "";
+            renderTable();
+        });
+
+
+        // Helper: Generate next Teacher ID (Format: T2026-001)
+        async function getNextTeacherId() {
+            try {
+                const year = new Date().getFullYear();
+                const prefix = `T${year}-`;
+                const teachers = allUsers.filter(u => u.teacherId && u.teacherId.startsWith(prefix));
+                
+                if (teachers.length === 0) return `${prefix}001`;
+
+                const ids = teachers.map(u => {
+                    const parts = u.teacherId.split("-");
+                    return parts.length > 1 ? parseInt(parts[1]) : 0;
+                });
+                const maxId = Math.max(...ids);
+                return `${prefix}${String(maxId + 1).padStart(3, '0')}`;
+            } catch (e) {
+                console.error("ID Generation Error:", e);
+                return `T2026-001`;
+            }
+        }
+
+        // Action: Approve User
+        window.approveUser = async (id) => {
+            const u = allUsers.find(x => x._id === id);
+            if (!u) return;
+
+            const ok = await showConfirm(`Activate account for <strong>${u.name}</strong>? They will be notified to log in with their Teacher ID.`, "Approve Teacher", "Activate", false);
+            if (!ok) return;
+
+            try {
+                await updateDoc(doc(db, "users", id), {
+                    status: "active",
+                    isActive: true,
+                    activatedAt: serverTimestamp(),
+                    updatedAt: serverTimestamp()
+                });
+                showToast(`Account for ${u.name} is now active.`, "success");
+                logAdminAction("APPROVE_USER", u);
+            } catch (err) {
+                showToast("Action failed: " + err.message, "error");
+            }
+        };
+
+        // Action: Deactivate User
+        window.deactivateUser = async (id) => {
+            const u = allUsers.find(x => x._id === id);
+            if (!u) return;
+
+            const ok = await showConfirm(`Deactivate account for <strong>${u.name}</strong>? This will revoke their access immediately.`, "Deactivate Account", "Deactivate", true);
+            if (!ok) return;
+
+            try {
+                await updateDoc(doc(db, "users", id), {
+                    status: "inactive",
+                    isActive: false,
+                    updatedAt: serverTimestamp()
+                });
+                showToast(`Account for ${u.name} has been deactivated.`, "warning");
+                logAdminAction("DEACTIVATE_USER", u);
+            } catch (err) {
+                showToast("Action failed: " + err.message, "error");
+            }
+        };
+
+        // Action: Reset Password
+        window.resetPassword = async (id) => {
+            const u = allUsers.find(x => x._id === id);
+            if (!u || !u.teacherId) {
+                showToast("Cannot reset password without Teacher ID.", "error");
+                return;
+            }
+
+            // TYYYY-XXX -> TYYXXX
+            const pPart = u.teacherId.substring(1).replace("-", ""); 
+            const defaultPassword = "T" + pPart.substring(2, 4) + pPart.substring(4);
+
+            const ok = await showConfirm(`Reset password for <strong>${u.name}</strong> to default?<br/><br/>New Password: <code>${defaultPassword}</code>`, "Reset Password", "Reset", true);
+            if (!ok) return;
+
+            try {
+                const passHash = await hashPassword(defaultPassword);
+                await updateDoc(doc(db, "users", id), {
+                    passwordHash: passHash,
+                    needsPasswordChange: true, // Internal flag
+                    updatedAt: serverTimestamp()
+                });
+                showToast(`Password reset successfully for ${u.name}.`, "success");
+                logAdminAction("RESET_PASSWORD", u);
+            } catch (err) {
+                showToast("Action failed: " + err.message, "error");
+            }
+        };
+
+        // Modal Logic
+        const addModalId = "add-user-modal";
+        const addForm = document.getElementById("add-user-form");
+        const saveBtn = document.getElementById("save-user-btn");
+        const editIdInput = document.getElementById("edit-user-id");
+
+        function openUserModal(u = null) {
+            if (u) {
+                // Edit mode
+                editIdInput.value = u._id;
+                document.getElementById("modal-title").textContent = "Edit User Profile";
+                document.getElementById("new-name").value = u.name || "";
+                document.getElementById("new-school").value = u.school || "";
+                document.getElementById("new-dept").value = u.department || "";
+                document.getElementById("new-tid-serial").value = u.teacherId ? u.teacherId.substring(1) : "";
+                document.getElementById("new-email").value = u.email || "";
+                document.getElementById("new-email").readOnly = true;
+                
+                // Set status radio
+                const statusRadios = document.getElementsByName("new-status");
+                statusRadios.forEach(r => {
+                    if (r.value === (u.status || "pending")) r.checked = true;
+                });
+
+                document.getElementById("save-user-btn").textContent = "Update Profile";
+                document.getElementById("password-hint-box").style.display = "none";
+            } else {
+                // Add mode
+                editIdInput.value = "";
+                addForm.reset();
+                document.getElementById("modal-title").textContent = "Create New Teacher Account";
+                document.getElementById("new-email").readOnly = false;
+                document.getElementById("save-user-btn").textContent = "Create Account";
+                document.getElementById("password-hint-box").style.display = "block";
+                
+                // Pre-fill suggested ID
+                getNextTeacherId().then(nextId => {
+                    document.getElementById("new-tid-serial").value = nextId.substring(1);
+                });
+            }
+            openModal(addModalId);
+        }
+
+        document.getElementById("open-add-modal").addEventListener("click", () => openUserModal());
+        document.getElementById("close-add-modal").addEventListener("click", () => closeModal(addModalId));
+        document.getElementById("cancel-add").addEventListener("click", () => closeModal(addModalId));
+
+        window.editUser = (id) => {
+            const u = allUsers.find(x => x._id === id);
+            if (u) openUserModal(u);
+        };
+
+        window.deleteUser = async (id, name) => {
+            const ok = await showConfirm(`Are you sure you want to delete <strong>${name}</strong>? This will permanentely remove their system profile.`, "Delete User", "Delete", true);
+            if (!ok) return;
+
+            try {
+                const u = allUsers.find(x => x._id === id);
+                await deleteDoc(doc(db, "users", id));
+                showToast("User deleted successfully.", "success");
+                logAdminAction("DELETE_USER", u);
+            } catch (err) {
+                showToast("Error deleting user: " + err.message, "error");
+            }
+        };
+
+        addForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const name = document.getElementById("new-name").value.trim();
+            const email = document.getElementById("new-email").value.trim();
+            const school = document.getElementById("new-school").value;
+            const department = document.getElementById("new-dept").value.trim();
+            const serial = document.getElementById("new-tid-serial").value.trim();
+            const status = document.querySelector('input[name="new-status"]:checked').value;
+
+            if (!serial) { showToast("Teacher ID is required.", "error"); return; }
+            if (!school) { showToast("School is required.", "error"); return; }
+            
+            const teacherId = "T" + serial;
+            const editingId = editIdInput.value;
+            const isEdit = !!editingId;
+
+            // Unique ID check
+            const duplicate = allUsers.find(u => u.teacherId === teacherId && u._id !== editingId);
+            if (duplicate) {
+                showToast(`Teacher ID ${teacherId} is already assigned to ${duplicate.name}.`, "error");
+                return;
+            }
+
+            setButtonLoading(saveBtn, true, isEdit ? "Updating..." : "Creating...");
+
+            try {
+                const userData = {
+                    name: name,
+                    teacherId: teacherId,
+                    school: school,
+                    department: department,
+                    status: status,
+                    isActive: status === "active",
+                    updatedAt: serverTimestamp()
+                };
+
+                if (isEdit) {
+                    await updateDoc(doc(db, "users", editingId), userData);
+                    showToast("Profile updated successfully.", "success");
+                    logAdminAction("EDIT_USER", { _id: editingId, name, email, ...userData });
+                } else {
+                    // Password calculation: TYYYY-SEQ -> TYYSEQ
+                    const pPart = serial.replace("-", ""); 
+                    const password = "T" + pPart.substring(2, 4) + pPart.substring(4);
+
+                    // Set activation deadline (7 days from now)
+                    const deadline = new Date();
+                    deadline.setDate(deadline.getDate() + 7);
+                    userData.activationDeadline = deadline;
+
+                    // 1. Create in Firebase Auth
+                    const res = await createUserWithEmailAndPassword(auth, email, password);
+                    
+                    // 2. Create profile in Firestore
+                    userData.email = email;
+                    userData.role = "teacher";
+                    userData.createdAt = serverTimestamp();
+                    userData.passwordHash = await hashPassword(password);
+                    await setDoc(doc(db, "users", res.user.uid), userData);
+
+                    showToast("Account created successfully. User notified to log in with Teacher ID.", "success");
+                    logAdminAction("CREATE_USER", { _id: res.user.uid, name, email, ...userData });
+                }
+                closeModal(addModalId);
+                addForm.reset();
+            } catch (err) {
+                let msg = err.message;
+                if (err.code === "auth/email-already-in-use") msg = "This email is already registered.";
+                if (err.code === "auth/weak-password") msg = "Password is too weak.";
+                showToast("Error: " + msg, "error");
+            } finally {
+                setButtonLoading(saveBtn, false);
+            }
+        });
+
+    </script>
+</body>
+
+</html>
