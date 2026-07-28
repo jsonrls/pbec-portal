@@ -173,6 +173,7 @@
         import { initSidebar, showToast, showConfirm, setButtonLoading, formatDateTime } from "../js/ui.js";
         import { lucideIcon } from "../js/lucide-icons.js";
         import { db } from "../js/firebase-config.js";
+        import { logActivity } from "../js/audit.js";
         import {
             collection, addDoc, getDocs, deleteDoc, doc,
             serverTimestamp, query, orderBy, onSnapshot, updateDoc, where, collectionGroup
@@ -392,7 +393,7 @@
                 const setA = shuffled.slice(0, Math.min(count, shuffled.length));
                 const setB = [...setA].sort(() => Math.random() - 0.5);
 
-                await addDoc(collection(db, "exams"), {
+                const createdRef = await addDoc(collection(db, "exams"), {
                     examName: name, subject,
                     setAQuestionIds: setA.map(q => q._id),
                     setBQuestionIds: setB.map(q => q._id),
@@ -405,6 +406,12 @@
                     questionCount: setA.length
                 });
 
+                await logActivity(user, "CREATE_EXAM", `Generated exam: ${name}`, {
+                    entityType: "exam",
+                    entityId: createdRef.id,
+                    subject,
+                    questionCount: setA.length
+                });
                 showToast(`Exam "${name}" generated with ${setA.length} questions!`, "success");
                 document.getElementById("modal-generate").classList.add("hidden");
             } catch (err) {
@@ -474,6 +481,9 @@
             setButtonLoading(btn, true, "Saving…");
             try {
                 await updateDoc(doc(db, "exams", id), { examName: name });
+                await logActivity(user, "UPDATE_EXAM", `Renamed exam to: ${name}`, {
+                    entityType: "exam", entityId: id
+                });
                 showToast("Exam renamed.", "success");
                 document.getElementById("modal-rename").classList.add("hidden");
             } catch (err) {
@@ -489,6 +499,9 @@
             if (!ok) return;
             try {
                 await deleteDoc(doc(db, "exams", id));
+                await logActivity(user, "DELETE_EXAM", `Deleted exam: ${name}`, {
+                    entityType: "exam", entityId: id
+                });
                 showToast("Exam deleted.", "success");
             } catch (err) {
                 showToast("Error: " + err.message, "error");

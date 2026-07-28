@@ -250,9 +250,11 @@ question_banks
 question_banks/{bankId}/questions
 exams
 examResults
-activityLogs
+audit_logs
 settings
 ```
+
+The `audit_logs` collection records successful CRUD transactions, authentication events, failed or blocked Teacher ID logins, page views, exports, printing, and logout events. Audit records include the actor, operation, target type and ID, outcome, page, and session identifier. Passwords, API keys, credentials, and tokens are excluded from audit metadata.
 
 Question banks and exams are shared with the Android app when they use the same Firebase project and compatible ownership fields such as:
 

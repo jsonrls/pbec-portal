@@ -143,6 +143,7 @@
         import { initSidebar, showToast, setButtonLoading, debounce } from "../js/ui.js";
         import { getSettings } from "../js/settings.js";
         import { db } from "../js/firebase-config.js";
+        import { logActivity } from "../js/audit.js";
         import {
             collection, getDocs, setDoc, doc,
             serverTimestamp, query, orderBy, where, onSnapshot
@@ -335,6 +336,14 @@
                     scoreB: set === "B" ? value : (existing.scoreB ?? null),
                     updatedAt: serverTimestamp()
                 }, { merge: true });
+                await logActivity(user, "UPDATE_SCORE", `Updated Set ${set} score for a student in ${currentExam.examName}`, {
+                    entityType: "examResult",
+                    entityId: docId,
+                    examId: currentExam._id,
+                    studentDocId,
+                    set,
+                    value
+                });
             } catch (err) {
                 showToast("Error saving score: " + err.message, "error");
             }
@@ -349,6 +358,13 @@
                     teacherEmail: user.email,
                     scoreA: null, scoreB: null, updatedAt: serverTimestamp()
                 }, { merge: true });
+                await logActivity(user, "CLEAR_SCORE", `Cleared student scores in ${currentExam.examName}`, {
+                    operation: "UPDATE",
+                    entityType: "examResult",
+                    entityId: docId,
+                    examId: currentExam._id,
+                    studentDocId
+                });
                 showToast("Scores cleared.", "info");
             } catch (err) {
                 showToast("Error: " + err.message, "error");
@@ -395,6 +411,12 @@
                 download: `${currentExam.examName.replace(/[^a-z0-9]/gi, "_")}_results.csv`
             });
             a.click();
+            logActivity(user, "EXPORT_RESULTS", `Exported results for ${currentExam.examName}`, {
+                operation: "READ",
+                entityType: "examResult",
+                entityId: currentExam._id,
+                studentCount: allStudents.length
+            });
             showToast("Results exported!", "success");
         });
     </script>

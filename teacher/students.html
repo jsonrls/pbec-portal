@@ -173,6 +173,7 @@
         import { initSidebar, showToast, showConfirm, setButtonLoading, formatDate, debounce } from "../js/ui.js";
         import { lucideIcon } from "../js/lucide-icons.js";
         import { db } from "../js/firebase-config.js";
+        import { logActivity } from "../js/audit.js";
         import {
             collection, addDoc, getDocs, updateDoc, deleteDoc,
             doc, serverTimestamp, query, orderBy, onSnapshot, writeBatch
@@ -299,10 +300,16 @@
                 const data = { name, studentId: sid, program, yearLevel: year, section, email, notes, updatedAt: serverTimestamp() };
                 if (editingId) {
                     await updateDoc(doc(db, "students", editingId), data);
+                    await logActivity(user, "UPDATE_STUDENT", `Updated student: ${name}`, {
+                        entityType: "student", entityId: editingId, studentId: sid
+                    });
                     showToast("Student updated successfully.", "success");
                 } else {
                     data.createdAt = serverTimestamp();
-                    await addDoc(collection(db, "students"), data);
+                    const createdRef = await addDoc(collection(db, "students"), data);
+                    await logActivity(user, "CREATE_STUDENT", `Added student: ${name}`, {
+                        entityType: "student", entityId: createdRef.id, studentId: sid
+                    });
                     showToast("Student added successfully.", "success");
                 }
                 closeModal();
@@ -324,6 +331,9 @@
             if (!ok) return;
             try {
                 await updateDoc(doc(db, "students", id), { isArchived: true, updatedAt: serverTimestamp() });
+                await logActivity(user, "ARCHIVE_STUDENT", `Archived student: ${name}`, {
+                    entityType: "student", entityId: id
+                });
                 showToast("Student archived.", "success");
             } catch (err) {
                 showToast("Error archiving student: " + err.message, "error");
@@ -446,6 +456,10 @@
                     await batch.commit();
                 }
 
+                await logActivity(user, "IMPORT_STUDENTS", `Imported ${importData.length} students`, {
+                    entityType: "student",
+                    count: importData.length
+                });
                 showToast(`Successfully imported ${importData.length} students!`, "success");
                 closeImportModal();
             } catch (err) {

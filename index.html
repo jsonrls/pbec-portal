@@ -114,6 +114,9 @@
           case "auth/too-many-requests":
             msg = "Too many failed attempts. Try again later.";
             break;
+          case "auth/account-locked":
+            msg = "This account is temporarily locked after repeated failed logins. Contact an administrator or try again in 15 minutes.";
+            break;
         }
         
         errorBox.textContent = msg;

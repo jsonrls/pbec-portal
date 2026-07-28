@@ -298,12 +298,16 @@
                 const data = { name, studentId: sid, program, yearLevel: year, section, email, notes, updatedAt: serverTimestamp() };
                 if (editingId) {
                     await updateDoc(doc(db, "students", editingId), data);
-                    await logActivity(user, "UPDATE_STUDENT", `Updated student: ${data.name}`, { studentId: data.studentId, id: editingId });
+                    await logActivity(user, "UPDATE_STUDENT", `Updated student: ${data.name}`, {
+                        entityType: "student", entityId: editingId, studentId: data.studentId
+                    });
                     showToast("Student updated successfully.", "success");
                 } else {
                     data.createdAt = serverTimestamp();
-                    await addDoc(collection(db, "students"), data);
-                    await logActivity(user, "ADD_STUDENT", `Added student: ${data.name}`, { studentId: data.studentId });
+                    const createdRef = await addDoc(collection(db, "students"), data);
+                    await logActivity(user, "CREATE_STUDENT", `Added student: ${data.name}`, {
+                        entityType: "student", entityId: createdRef.id, studentId: data.studentId
+                    });
                     showToast("Student added successfully.", "success");
                 }
                 closeModal();
@@ -325,7 +329,9 @@
             if (!ok) return;
             try {
                 await deleteDoc(doc(db, "students", id));
-                await logActivity(user, "DELETE_STUDENT", `Deleted student: ${name}`, { id });
+                await logActivity(user, "DELETE_STUDENT", `Deleted student: ${name}`, {
+                    entityType: "student", entityId: id
+                });
                 showToast("Student deleted.", "success");
             } catch (err) {
                 showToast("Error deleting student: " + err.message, "error");
@@ -446,7 +452,9 @@
                     await batch.commit();
                 }
 
-                await logActivity(user, "IMPORT_STUDENTS", `Imported ${importData.length} students via file`, { count: importData.length });
+                await logActivity(user, "IMPORT_STUDENTS", `Imported ${importData.length} students via file`, {
+                    entityType: "student", count: importData.length
+                });
 
                 showToast(`Successfully imported ${importData.length} students!`, "success");
                 closeImportModal();

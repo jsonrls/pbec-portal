@@ -91,7 +91,13 @@
                             </select>
                         </div>
                         <div style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;">
-                            <button class="btn btn-secondary btn-sm" id="btn-refresh-master">🔄 Refresh</button>
+                            <button class="btn btn-secondary btn-sm btn-icon" id="btn-refresh-master"
+                                type="button" title="Refresh questions" aria-label="Refresh questions">
+                                <svg class="lucide" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5" />
+                                    <path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5" />
+                                </svg>
+                            </button>
                             <button class="btn btn-danger btn-sm" id="btn-delete-subject" disabled>Delete Subject Bank</button>
                             <button class="btn btn-danger btn-sm" id="btn-delete-all">Delete All</button>
                         </div>
@@ -867,6 +873,10 @@
             a.href = "../question-bank-template.xlsx";
             a.download = "question-bank-template.xlsx";
             a.click();
+            logActivity(user, "DOWNLOAD_TEMPLATE", "Downloaded the question-bank import template", {
+                operation: "READ",
+                entityType: "questionBank"
+            });
             showToast("Template downloaded!", "info");
         });
 
@@ -895,6 +905,12 @@
             
             const fileName = `PBEC_QuestionBank_${new Date().toISOString().split('T')[0]}.xlsx`;
             XLSX.writeFile(wb, fileName);
+            logActivity(user, "EXPORT_QUESTIONS", `Exported ${exportData.length} questions`, {
+                operation: "READ",
+                entityType: "questionBank",
+                count: exportData.length,
+                fileName
+            });
             
             showToast("Question bank exported!", "success");
         });

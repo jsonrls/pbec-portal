@@ -10,7 +10,7 @@ export function renderSidebar(activePage, user) {
     logs: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>`,
     settings: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.8 1.8 0 0 0 .36 1.98l.04.04a2 2 0 1 1-2.83 2.83l-.04-.04a1.8 1.8 0 0 0-1.98-.36 1.8 1.8 0 0 0-1.1 1.66V21a2 2 0 1 1-4 0v-.06a1.8 1.8 0 0 0-1.1-1.66 1.8 1.8 0 0 0-1.98.36l-.04.04a2 2 0 1 1-2.83-2.83l.04-.04A1.8 1.8 0 0 0 4.6 15a1.8 1.8 0 0 0-1.66-1.1H3a2 2 0 1 1 0-4h.06A1.8 1.8 0 0 0 4.72 8.8a1.8 1.8 0 0 0-.36-1.98l-.04-.04a2 2 0 1 1 2.83-2.83l.04.04A1.8 1.8 0 0 0 9.17 4.35 1.8 1.8 0 0 0 10.27 2.7V3a2 2 0 1 1 4 0v-.3a1.8 1.8 0 0 0 1.1 1.65 1.8 1.8 0 0 0 1.98-.36l.04-.04a2 2 0 1 1 2.83 2.83l-.04.04a1.8 1.8 0 0 0-.36 1.98 1.8 1.8 0 0 0 1.66 1.1H21a2 2 0 1 1 0 4h-.06A1.8 1.8 0 0 0 19.4 15Z"/></svg>`
   };
-  const workspaceNav = [
+  const teacherNav = [
     { id: "dashboard", icon: icons.dashboard, label: "Dashboard", href: "dashboard.html" },
     { id: "students", icon: icons.students, label: "Students", href: "students.html" },
     { id: "question-bank", icon: icons["question-bank"], label: "Question Bank", href: "question-bank.html" },
@@ -18,11 +18,17 @@ export function renderSidebar(activePage, user) {
     { id: "summary", icon: icons.summary, label: "Summary", href: "summary.html" }
   ];
 
+  const adminContentNav = [
+    { id: "dashboard", icon: icons.dashboard, label: "Overview", href: "dashboard.html" },
+    { id: "question-bank", icon: icons["question-bank"], label: "Question Bank", href: "question-bank.html" }
+  ];
+
   const systemNav = role === "admin" ? [
-    { id: "users", icon: icons.users, label: "Teacher Management", href: "users.html" },
+    { id: "users", icon: icons.users, label: "User Accounts", href: "users.html" },
     { id: "logs", icon: icons.logs, label: "Audit Logs", href: "logs.html" },
     { id: "settings", icon: icons.settings, label: "System Settings", href: "settings.html" }
   ] : [];
+  const workspaceNav = role === "admin" ? adminContentNav : teacherNav;
 
   const renderNav = (items) => items.map(item => `
     <a href="${item.href}" class="nav-item ${activePage === item.id ? "active" : ""}">
@@ -35,7 +41,7 @@ export function renderSidebar(activePage, user) {
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-logo">
         <div class="sidebar-logo-icon">
-          <img src="../assets/pbec-logo.png" alt="PBEC" />
+          <img src="../assets/pbec-logo-transparent.png" alt="PBEC" />
         </div>
         <div class="sidebar-logo-text">
           <h4>PBEC Command</h4>
@@ -44,13 +50,13 @@ export function renderSidebar(activePage, user) {
       </div>
 
       <div class="sidebar-section">
-        <div class="sidebar-section-label">${role === "admin" ? "Operations" : "Workspace"}</div>
+        <div class="sidebar-section-label">${role === "admin" ? "Content operations" : "Workspace"}</div>
         ${renderNav(workspaceNav)}
       </div>
 
       ${systemNav.length ? `
       <div class="sidebar-section">
-        <div class="sidebar-section-label">System</div>
+        <div class="sidebar-section-label">Access & oversight</div>
         ${renderNav(systemNav)}
       </div>
       ` : ""}

@@ -222,7 +222,7 @@
                     <div class="topbar-subtitle" id="exam-subtitle-top">Review all questions</div>
                 </div>
                 <div class="topbar-actions">
-                    <button class="btn btn-secondary" onclick="window.print()">🖨️ Print Exam</button>
+                    <button class="btn btn-secondary" id="btn-print-exam">🖨️ Print Exam</button>
                     <a href="exams.html" class="btn btn-ghost">Back to List</a>
                 </div>
             </header>
@@ -277,6 +277,7 @@
         import { renderSidebar } from "../js/sidebar.js";
         import { initSidebar, showToast, formatDateTime } from "../js/ui.js";
         import { db } from "../js/firebase-config.js";
+        import { logActivity } from "../js/audit.js";
         import {
             collection, getDoc, getDocs, doc, collectionGroup, query, where
         } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -286,6 +287,14 @@
         document.getElementById("user-email-display").textContent = user.name || user.email;
         document.getElementById("user-avatar").textContent = (user.name || user.email)[0].toUpperCase();
         document.getElementById("logout-btn").addEventListener("click", logout);
+        document.getElementById("btn-print-exam").addEventListener("click", () => {
+            logActivity(user, "PRINT_EXAM", "Opened the exam print dialog", {
+                operation: "READ",
+                entityType: "exam",
+                entityId: examId
+            });
+            window.print();
+        });
         initSidebar();
 
         const urlParams = new URLSearchParams(window.location.search);

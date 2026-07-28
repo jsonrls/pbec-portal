@@ -36,15 +36,22 @@
                     <div class="stat-card">
                         <div class="stat-icon teal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-5"/></svg></div>
                         <div class="stat-info">
-                            <div class="stat-value" id="stat-admin">0</div>
-                            <div class="stat-label">Admin Actions</div>
+                            <div class="stat-value" id="stat-auth">0</div>
+                            <div class="stat-label">Authentication Events</div>
                         </div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-icon yellow"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20"/><circle cx="9.5" cy="7.5" r="3.5"/><path d="M21 20v-1.5a4 4 0 0 0-3-3.87"/><path d="M16 4.3a3.5 3.5 0 0 1 0 6.4"/></svg></div>
                         <div class="stat-info">
-                            <div class="stat-value" id="stat-teacher">0</div>
-                            <div class="stat-label">Teacher Actions</div>
+                            <div class="stat-value" id="stat-crud">0</div>
+                            <div class="stat-label">Data Transactions</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon red"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg></div>
+                        <div class="stat-info">
+                            <div class="stat-value" id="stat-failed">0</div>
+                            <div class="stat-label">Failed or Blocked</div>
                         </div>
                     </div>
                 </div>
@@ -60,6 +67,22 @@
                                 <option value="">All Roles</option>
                                 <option value="admin">Admin</option>
                                 <option value="teacher">Teacher</option>
+                                <option value="unknown">Unknown</option>
+                            </select>
+                            <select class="form-control" id="filter-operation" style="max-width:180px;">
+                                <option value="">All Operations</option>
+                                <option value="AUTH">Authentication</option>
+                                <option value="CREATE">Create</option>
+                                <option value="READ">Read</option>
+                                <option value="UPDATE">Update</option>
+                                <option value="DELETE">Delete</option>
+                                <option value="OTHER">Other</option>
+                            </select>
+                            <select class="form-control" id="filter-outcome" style="max-width:180px;">
+                                <option value="">All Outcomes</option>
+                                <option value="success">Success</option>
+                                <option value="failed">Failed</option>
+                                <option value="blocked">Blocked</option>
                             </select>
                         </div>
                     </div>
@@ -72,13 +95,15 @@
                                 <tr>
                                     <th>Time</th>
                                     <th>User</th>
-                                    <th>Role</th>
+                                    <th>Operation</th>
                                     <th>Action</th>
+                                    <th>Target</th>
+                                    <th>Result</th>
                                     <th>Description</th>
                                 </tr>
                             </thead>
                             <tbody id="logs-tbody">
-                                <tr><td colspan="5"><div class="spinner" style="margin:24px auto;"></div></td></tr>
+                                <tr><td colspan="7"><div class="spinner" style="margin:24px auto;"></div></td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -107,46 +132,103 @@
 
         let logs = [];
 
+        function inferLegacyOperation(action) {
+            const normalized = String(action || "").toUpperCase();
+            if (normalized.includes("LOGIN") || normalized.includes("LOGOUT")) return "AUTH";
+            if (/^(ADD|CREATE|GENERATE|IMPORT|UPLOAD|REGISTER)/.test(normalized)) return "CREATE";
+            if (/^(DELETE|REMOVE|PURGE)/.test(normalized)) return "DELETE";
+            if (/^(VIEW|READ|OPEN|EXPORT|DOWNLOAD|PRINT)/.test(normalized)) return "READ";
+            if (/^(UPDATE|EDIT|RENAME|APPROVE|ACTIVATE|DEACTIVATE|RESET|RESTORE|ARCHIVE|CLEAR)/.test(normalized)) return "UPDATE";
+            return "OTHER";
+        }
+
         async function loadLogs() {
-            const snap = await getDocs(query(collection(db, "audit_logs"), orderBy("timestamp", "desc"), limit(200)));
-            logs = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+            const snap = await getDocs(query(collection(db, "audit_logs"), orderBy("timestamp", "desc"), limit(500)));
+            logs = snap.docs.map(d => {
+                const entry = { _id: d.id, ...d.data() };
+                return {
+                    ...entry,
+                    operation: entry.operation || inferLegacyOperation(entry.action),
+                    outcome: entry.outcome || "success",
+                    entityType: entry.entityType || "system",
+                    entityId: entry.entityId || entry.metadata?.id || null
+                };
+            });
             renderStats();
             renderLogs();
         }
 
         function renderStats() {
             document.getElementById("stat-logs").textContent = logs.length;
-            document.getElementById("stat-admin").textContent = logs.filter(l => l.userRole === "admin").length;
-            document.getElementById("stat-teacher").textContent = logs.filter(l => l.userRole === "teacher").length;
+            document.getElementById("stat-auth").textContent = logs.filter(l => l.operation === "AUTH").length;
+            document.getElementById("stat-crud").textContent = logs.filter(l =>
+                ["CREATE", "READ", "UPDATE", "DELETE"].includes(l.operation)
+            ).length;
+            document.getElementById("stat-failed").textContent = logs.filter(l =>
+                ["failed", "blocked"].includes(l.outcome)
+            ).length;
+        }
+
+        function safeText(value) {
+            const node = document.createElement("div");
+            node.textContent = String(value ?? "");
+            return node.innerHTML;
+        }
+
+        function operationBadge(operation) {
+            const classes = {
+                AUTH: "badge-blue",
+                CREATE: "badge-green",
+                READ: "badge-gray",
+                UPDATE: "badge-yellow",
+                DELETE: "badge-red",
+                OTHER: "badge-gray"
+            };
+            return `<span class="badge ${classes[operation] || "badge-gray"}">${safeText(operation || "OTHER")}</span>`;
         }
 
         function renderLogs() {
             const search = document.getElementById("search-input").value.toLowerCase();
             const role = document.getElementById("filter-role").value;
+            const operation = document.getElementById("filter-operation").value;
+            const outcome = document.getElementById("filter-outcome").value;
             const filtered = logs.filter(l => {
-                const text = `${l.userName || ""} ${l.action || ""} ${l.description || ""}`.toLowerCase();
-                return (!search || text.includes(search)) && (!role || l.userRole === role);
+                const text = `${l.userName || ""} ${l.userEmail || ""} ${l.action || ""} ${l.entityType || ""} ${l.entityId || ""} ${l.description || ""}`.toLowerCase();
+                return (!search || text.includes(search)) &&
+                    (!role || l.userRole === role) &&
+                    (!operation || l.operation === operation) &&
+                    (!outcome || (l.outcome || "success") === outcome);
             });
 
             const tbody = document.getElementById("logs-tbody");
             if (!filtered.length) {
-                tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state" style="padding:28px;"><h4>No audit logs found</h4></div></td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state" style="padding:28px;"><h4>No audit logs found</h4></div></td></tr>`;
                 return;
             }
 
             tbody.innerHTML = filtered.map(l => `
                 <tr>
                     <td class="text-muted text-sm">${formatDateTime(l.timestamp)}</td>
-                    <td class="fw-600">${l.userName || "—"}</td>
-                    <td><span class="badge ${l.userRole === "admin" ? "badge-teal" : "badge-blue"}">${l.userRole || "—"}</span></td>
-                    <td><span class="badge badge-gray">${l.action || "—"}</span></td>
-                    <td class="text-sm">${l.description || "—"}</td>
+                    <td>
+                        <div class="fw-600">${safeText(l.userName || "—")}</div>
+                        <div class="text-xs text-muted">${safeText(l.userRole || "unknown")}</div>
+                    </td>
+                    <td>${operationBadge(l.operation)}</td>
+                    <td><span class="audit-action-code">${safeText(l.action || "—")}</span></td>
+                    <td>
+                        <div class="text-sm">${safeText(l.entityType || "system")}</div>
+                        <div class="text-xs text-muted truncate" style="max-width:150px;" title="${safeText(l.entityId || "")}">${safeText(l.entityId || "—")}</div>
+                    </td>
+                    <td><span class="badge ${(l.outcome || "success") === "success" ? "badge-green" : "badge-red"}">${safeText(l.outcome || "success")}</span></td>
+                    <td class="text-sm">${safeText(l.description || "—")}</td>
                 </tr>
             `).join("");
         }
 
         document.getElementById("search-input").addEventListener("input", debounce(renderLogs, 200));
         document.getElementById("filter-role").addEventListener("change", renderLogs);
+        document.getElementById("filter-operation").addEventListener("change", renderLogs);
+        document.getElementById("filter-outcome").addEventListener("change", renderLogs);
         document.getElementById("btn-refresh").addEventListener("click", loadLogs);
 
         loadLogs();
