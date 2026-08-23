@@ -248,11 +248,17 @@ users
 students
 question_banks
 question_banks/{bankId}/questions
+question_banks/{bankId}/handouts
+handouts
+handouts/{handoutId}
 exams
 examResults
 audit_logs
 settings
 ```
+
+Notes:
+- Handouts are written to `question_banks/{bankId}/handouts` for in-app management and mirrored to top-level `handouts/{handoutId}` so mobile clients can consume one shared feed.
 
 The `audit_logs` collection records successful CRUD transactions, authentication events, failed or blocked Teacher ID logins, page views, exports, printing, and logout events. Audit records include the actor, operation, target type and ID, outcome, page, and session identifier. Passwords, API keys, credentials, and tokens are excluded from audit metadata.
 

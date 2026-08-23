@@ -28,6 +28,7 @@ function inferEntityType(action) {
     const normalized = String(action || "").toUpperCase();
     if (normalized.includes("STUDENT")) return "student";
     if (normalized.includes("QUESTION")) return "questionBank";
+    if (normalized.includes("HANDOUT")) return "handout";
     if (normalized.includes("RESULT") || normalized.includes("SCORE")) return "examResult";
     if (normalized.includes("EXAM")) return "exam";
     if (normalized.includes("SETTING")) return "settings";

@@ -18,19 +18,22 @@
                 <button class="btn btn-ghost btn-icon hamburger" id="hamburger">☰</button>
                 <div style="flex:1;">
                     <div class="topbar-title">Question Bank</div>
-                    <div class="topbar-subtitle">Upload and manage exam questions</div>
+                    <div class="topbar-subtitle">Upload and manage questions and handouts</div>
                 </div>
                 <div class="topbar-actions">
                     <button class="btn btn-secondary" id="btn-download-template">⬇ Template</button>
                     <button class="btn btn-secondary" id="btn-export">📤 Export Excel</button>
                     <button class="btn btn-primary" id="btn-upload">📁 Upload CSV/Excel</button>
+                    <button class="btn btn-primary" id="btn-add-question">➕ Add Question</button>
+                    <button class="btn btn-primary" id="btn-upload-handout">📁 Upload Handout</button>
                     <input type="file" id="file-input" accept=".csv,.xlsx,.xls" class="hidden" />
+                    <input type="file" id="handout-file-input" class="hidden" />
                 </div>
             </header>
 
             <main class="page-content">
                 <!-- Stats bar -->
-                <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:24px;" id="qb-stats">
+                <div class="stat-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:24px;" id="qb-stats">
                     <div class="stat-card">
                         <div class="stat-icon teal">📚</div>
                         <div class="stat-info">
@@ -59,6 +62,13 @@
                             <div class="stat-label">Professional EE</div>
                         </div>
                     </div>
+                    <div class="stat-card">
+                        <div class="stat-icon purple">📄</div>
+                        <div class="stat-info">
+                            <div class="stat-value" id="hb-total">—</div>
+                            <div class="stat-label">Handouts</div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Subject Tabs -->
@@ -67,6 +77,11 @@
                     <div class="chip" data-subject="Mathematics">Mathematics</div>
                     <div class="chip" data-subject="ESAS">ESAS</div>
                     <div class="chip" data-subject="Professional EE">Professional EE</div>
+                </div>
+
+                <div class="chip-group mb-16" id="mode-switch">
+                    <button class="chip active" type="button" data-mode="questions">Question Bank</button>
+                    <button class="chip" type="button" data-mode="handouts">Handouts</button>
                 </div>
 
                 <!-- Master Questions List View -->
@@ -98,8 +113,8 @@
                                     <path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5" />
                                 </svg>
                             </button>
-                            <button class="btn btn-danger btn-sm" id="btn-delete-subject" disabled>Delete Subject Bank</button>
-                            <button class="btn btn-danger btn-sm" id="btn-delete-all">Delete All</button>
+                            <button class="btn btn-danger btn-sm" id="btn-delete-subject" disabled>Delete Subject Questions</button>
+                            <button class="btn btn-danger btn-sm" id="btn-delete-all">Delete All Questions</button>
                         </div>
                     </div>
 
@@ -113,6 +128,7 @@
                                         <th>Topic</th>
                                         <th>Category</th>
                                         <th>Ans</th>
+                                        <th style="width:120px;">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody id="master-table-body">
@@ -120,6 +136,49 @@
                                 </tbody>
                             </table>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Handout List View -->
+                <div id="view-handout-content" class="hidden">
+                    <div class="filter-bar">
+                        <div class="filter-group">
+                            <label>Search</label>
+                            <input type="text" class="form-control" id="handout-search" placeholder="Search handouts..." style="min-width: 240px;">
+                        </div>
+                        <div style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;">
+                            <button class="btn btn-secondary btn-sm btn-icon" id="btn-refresh-handout"
+                                type="button" title="Refresh handouts" aria-label="Refresh handouts">
+                                <svg class="lucide" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5" />
+                                    <path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="table-wrapper" style="max-height: 600px; overflow-y: auto;">
+                            <table>
+                                <thead style="position: sticky; top: 0; background: var(--bg-surface); z-index: 10;">
+                                    <tr>
+                                        <th>Title</th>
+                                        <th>Subject</th>
+                                        <th>File</th>
+                                        <th>Uploaded</th>
+                                        <th style="width:130px;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="handout-table-body">
+                                    <tr><td colspan="5" class="text-center py-24"><span class="spinner"></span></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;">
+                        <button class="btn btn-danger btn-sm" id="btn-handout-delete-subject" disabled>Delete Subject Handouts</button>
+                        <button class="btn btn-danger btn-sm" id="btn-handout-delete-all">Delete All Handouts</button>
                     </div>
                 </div>
             </main>
@@ -165,7 +224,128 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" id="upload-cancel">Cancel</button>
-                <button class="btn btn-primary" id="upload-submit" disabled>Upload Questions</button>
+                    <button class="btn btn-primary" id="upload-submit" disabled>Upload Questions</button>
+                </div>
+            </div>
+        </div>
+
+    <!-- Add/Edit Question modal -->
+    <div class="modal-overlay hidden" id="modal-question-form">
+        <div class="modal" style="max-width:740px;">
+            <div class="modal-header">
+                <span style="font-size:20px;">✏️</span>
+                <h3 id="question-form-title">Add Question</h3>
+                <button class="modal-close" id="question-form-close">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-grid" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;">
+                    <div class="form-group">
+                        <label>Subject *</label>
+                        <select class="form-control" id="question-form-subject">
+                            <option value="Mathematics">Mathematics</option>
+                            <option value="ESAS">ESAS</option>
+                            <option value="Professional EE">Professional EE</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Session Name</label>
+                        <input class="form-control" id="question-form-session" placeholder="e.g. Midterm 2024 Set" />
+                    </div>
+                    <div class="form-group">
+                        <label>Topic *</label>
+                        <input class="form-control" id="question-form-topic" placeholder="e.g. Thermodynamics" />
+                    </div>
+                    <div class="form-group">
+                        <label>Category</label>
+                        <select class="form-control" id="question-form-category">
+                            <option value="">Auto-detect</option>
+                            <option value="Objective">Objective</option>
+                            <option value="Computation">Computation</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Question Text *</label>
+                    <textarea class="form-control" id="question-form-text" rows="3" placeholder="Type the question here"></textarea>
+                </div>
+                <div class="form-grid" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;">
+                    <div class="form-group">
+                        <label>Option A *</label>
+                        <input class="form-control" id="question-form-option-a" />
+                    </div>
+                    <div class="form-group">
+                        <label>Option B *</label>
+                        <input class="form-control" id="question-form-option-b" />
+                    </div>
+                    <div class="form-group">
+                        <label>Option C *</label>
+                        <input class="form-control" id="question-form-option-c" />
+                    </div>
+                    <div class="form-group">
+                        <label>Option D *</label>
+                        <input class="form-control" id="question-form-option-d" />
+                    </div>
+                    <div class="form-group" style="grid-column:1/2;">
+                        <label>Correct Answer *</label>
+                        <select class="form-control" id="question-form-answer">
+                            <option value="">Select correct answer</option>
+                            <option value="A">A</option>
+                            <option value="B">B</option>
+                            <option value="C">C</option>
+                            <option value="D">D</option>
+                        </select>
+                    </div>
+                </div>
+                <p class="text-sm text-muted mt-16">Editing Question Bank sessions or moving questions to another session is not supported. Delete + re-add the question if you need to relocate it.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="question-form-cancel">Cancel</button>
+                <button class="btn btn-primary" id="question-form-save" disabled>Save Question</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Handout upload/edit modal -->
+    <div class="modal-overlay hidden" id="modal-handout-upload">
+        <div class="modal" style="max-width:560px;">
+            <div class="modal-header">
+                <span style="font-size:20px;">📄</span>
+                <h3 id="handout-modal-title">Upload Handout</h3>
+                <button class="modal-close" id="handout-close">✕</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="handout-edit-id">
+                <input type="hidden" id="handout-edit-bank-id">
+                <div class="form-group">
+                    <label>Subject *</label>
+                    <select class="form-control" id="handout-subject">
+                        <option value="Mathematics">Mathematics</option>
+                        <option value="ESAS">ESAS</option>
+                        <option value="Professional EE">Professional EE</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Title *</label>
+                    <input class="form-control" id="handout-title" placeholder="e.g. Practice Workbook" />
+                </div>
+
+                <div class="drop-zone" id="handout-drop-zone">
+                    <div class="drop-icon">📁</div>
+                    <h4>Drop handout file here</h4>
+                    <p>Supports any document or file type</p>
+                    <p class="text-sm text-muted">Up to 15 MB. When editing, leave unchanged to keep the current file.</p>
+                    <div style="margin-top:12px;">
+                        <span id="selected-handout-file-name" class="badge badge-teal hidden"></span>
+                    </div>
+                </div>
+                <div class="progress-bar mt-16 hidden" id="handout-progress-bar">
+                    <div class="progress-fill" id="handout-progress-fill" style="width:0%"></div>
+                </div>
+                <p class="text-sm text-muted mt-16" id="handout-status" style="text-align:center;"></p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="handout-cancel">Cancel</button>
+                <button class="btn btn-primary" id="handout-save" disabled>Save Handout</button>
             </div>
         </div>
     </div>
@@ -175,175 +355,276 @@
     <script type="module">
         import { requireAuth, logout } from "../js/auth.js";
         import { renderSidebar } from "../js/sidebar.js";
-        import { initSidebar, showToast, showConfirm, setButtonLoading, formatDateTime } from "../js/ui.js";
+        import { initSidebar, showToast, showConfirm, setButtonLoading } from "../js/ui.js";
         import { logActivity } from "../js/audit.js";
-        import { db } from "../js/firebase-config.js";
+        import { db, storage } from "../js/firebase-config.js";
         import {
-            collection, addDoc, getDocs, deleteDoc, doc,
-            serverTimestamp, query, orderBy, onSnapshot, writeBatch, where, getCountFromServer, collectionGroup
+            collection,
+            addDoc,
+            getDocs,
+            deleteDoc,
+            doc,
+            setDoc,
+            updateDoc,
+            serverTimestamp,
+            query,
+            onSnapshot,
+            writeBatch,
+            where,
+            collectionGroup,
+            increment
         } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+        import {
+            ref as storageRef,
+            uploadBytesResumable,
+            getDownloadURL,
+            deleteObject
+        } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+
+        const SUBJECTS = ["Mathematics", "ESAS", "Professional EE"];
+        const ELEMENTS = {
+            modeSwitch: document.getElementById("mode-switch"),
+            questionView: document.getElementById("view-master-content"),
+            handoutView: document.getElementById("view-handout-content"),
+            subjectChips: document.querySelectorAll(".chip[data-subject]"),
+            qsTotal: document.getElementById("qs-total"),
+            qsMath: document.getElementById("qs-math"),
+            qsEsas: document.getElementById("qs-esas"),
+            qsProf: document.getElementById("qs-prof"),
+            hbTotal: document.getElementById("hb-total"),
+            masterSearch: document.getElementById("master-search"),
+            filterCategory: document.getElementById("filter-category"),
+            filterTopic: document.getElementById("filter-topic"),
+            masterTable: document.getElementById("master-table-body"),
+            handoutSearch: document.getElementById("handout-search"),
+            handoutTable: document.getElementById("handout-table-body")
+        };
 
         const user = await requireAuth("admin");
+
+        if (!user || user.role !== "admin") {
+            window.location.replace("../index.html");
+        }
+
         document.getElementById("sidebar-mount").innerHTML = renderSidebar("question-bank", user);
-        document.getElementById("user-email-display").textContent = user.name || user.email;
-        document.getElementById("user-avatar").textContent = (user.name || user.email)[0].toUpperCase();
+        const userEmailEl = document.getElementById("user-email-display");
+        const userAvatarEl = document.getElementById("user-avatar");
+        if (!userEmailEl || !userAvatarEl) {
+            throw new Error("Sidebar did not render user profile elements yet.");
+        }
+        userEmailEl.textContent = user.name || user.email;
+        userAvatarEl.textContent = (user.name || user.email)[0].toUpperCase();
         document.getElementById("logout-btn").addEventListener("click", logout);
         initSidebar();
 
+        const adminTeacherId = user.teacherId || "ADMIN";
+        const FALLBACK_QUESTION_SESSION = "General Questions";
+        const FALLBACK_HANDOUT_SESSION = "General Handouts";
+        const MAX_HANDOUT_FILE_MB = 15;
+        const HANDOUT_CATALOG_COLLECTION = "handouts";
+        const HANDOUT_UPLOAD_STALL_MS = 30_000;
+        const HANDOUT_UPLOAD_MAX_MS = 300_000;
+
         let activeSubject = "all";
+        let activeMode = "questions";
+
         let selectedFile = null;
+        let selectedHandoutFile = null;
+        let currentlyEditingQuestion = null;
+        let currentlyEditingHandout = null;
+        let activeHandoutUploadTask = null;
+        let handoutSaveInProgress = false;
+        let handoutUploadCanceledByUser = false;
+        const handoutBankCache = new Map();
 
-        // ─── Load stats ────────────────────────────────────────────────
-        async function loadStats() {
-            const subjects = ["Mathematics", "ESAS", "Professional EE"];
-            const ids = ["qs-math", "qs-esas", "qs-prof"];
-            let total = 0;
-            await Promise.all(subjects.map(async (s, i) => {
-                const q = query(collection(db, "question_banks"), where("subject", "==", s));
-                const snap = await getDocs(q);
-                let count = 0;
-                snap.forEach(d => { count += d.data().questionCount || 0; });
-                document.getElementById(ids[i]).textContent = count;
-                total += count;
-            }));
-            document.getElementById("qs-total").textContent = total;
-        }
-
-        // ─── Master List Logic ────────────────────────────────────────
         let masterQuestions = [];
         let masterFiltered = [];
+        let masterHandouts = [];
+        let handoutFiltered = [];
 
-        async function loadMasterQuestions() {
-            const tbody = document.getElementById("master-table-body");
-            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-24"><span class="spinner"></span></td></tr>`;
-            
+        function buildHandoutCatalogPayload({
+            handoutId,
+            bankId,
+            title,
+            subject,
+            sessionName,
+            handoutType,
+            notes,
+            fileName,
+            fileUrl,
+            storagePath,
+            sourceFileName,
+            fileSize,
+            mimeType,
+            isCreate = false
+        }) {
+            const payload = {
+                handoutId,
+                bankId,
+                sourceCollection: "question_banks",
+                sourcePath: `question_banks/${bankId}/handouts/${handoutId}`,
+                itemType: "handout",
+                status: "active",
+                source: "question_banks",
+                sourceSession: toStr(sessionName || ""),
+                session: toStr(sessionName || ""),
+                title: toStr(title || ""),
+                subject: toStr(subject || ""),
+                sessionName: toStr(sessionName || ""),
+                handoutType: toStr(handoutType || ""),
+                notes: toStr(notes || ""),
+                fileName: toStr(fileName || ""),
+                fileUrl,
+                downloadUrl: fileUrl,
+                file: toStr(fileName || ""),
+                storagePath,
+                sourceFileName: toStr(sourceFileName || ""),
+                fileSize: Number(fileSize) || 0,
+                mimeType: toStr(mimeType || ""),
+                uploadedByTeacherId: adminTeacherId,
+                uploadedByUid: user.uid || "",
+                uploaderEmail: user.email || null,
+                createdBy: user.uid || "unknown",
+                createdByEmail: user.email || null,
+                updatedBy: user.uid || "unknown",
+                updatedByEmail: user.email || null,
+                updatedAt: serverTimestamp()
+            };
+
+            if (isCreate) payload.createdAt = serverTimestamp();
+            return payload;
+        }
+
+        async function removeHandoutCatalog(handoutId) {
+            if (!handoutId) return;
+
+            await deleteDoc(doc(db, HANDOUT_CATALOG_COLLECTION, handoutId)).catch(() => {
+                // Optional mirror collection may not contain an entry.
+            });
+        }
+
+        function mapNestedHandoutDoc(docSnap) {
+            const bankRef = docSnap.ref.parent.parent;
+            if (!bankRef || bankRef.parent?.id !== "question_banks") return null;
+
+            return {
+                ...docSnap.data(),
+                _id: docSnap.id,
+                _bankId: bankRef.id,
+                _ref: docSnap.ref
+            };
+        }
+
+        function isQuestionRecord(docData) {
+            return !docData?.itemType || docData.itemType === "question";
+        }
+
+        function escapeHtml(value = "") {
+            const stringValue = String(value ?? "");
+            return stringValue
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/\"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function toStr(value) {
+            return String(value ?? "");
+        }
+
+        function safeSubject(value) {
+            return SUBJECTS.includes(toStr(value)) ? toStr(value) : "Unknown";
+        }
+
+        function formatDate(ts) {
+            if (!ts) return "—";
+            const dateValue = ts.toDate ? ts.toDate() : new Date(ts);
+            return dateValue.toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" });
+        }
+
+        function setMode(mode) {
+            activeMode = mode;
+            ELEMENTS.questionView.classList.toggle("hidden", mode !== "questions");
+            ELEMENTS.handoutView.classList.toggle("hidden", mode !== "handouts");
+
+            ELEMENTS.modeSwitch.querySelectorAll("[data-mode]").forEach((button) => {
+                button.classList.toggle("active", button.dataset.mode === mode);
+            });
+
+            if (mode === "questions") {
+                loadMasterQuestions();
+            } else {
+                loadHandouts();
+            }
+        }
+
+        function updateSubjectControls() {
+            const subjectChip = document.querySelector(`[data-subject="${activeSubject}"]`);
+            if (!subjectChip) return;
+
+            ELEMENTS.subjectChips.forEach((chip) => chip.classList.remove("active"));
+            subjectChip.classList.add("active");
+
+            const questionDelete = document.getElementById("btn-delete-subject");
+            const handoutDelete = document.getElementById("btn-handout-delete-subject");
+            questionDelete.disabled = activeSubject === "all";
+            handoutDelete.disabled = activeSubject === "all";
+        }
+
+        ELEMENTS.modeSwitch.querySelectorAll("[data-mode]").forEach((button) => {
+            button.addEventListener("click", () => {
+                setMode(button.dataset.mode);
+            });
+        });
+
+        // ─── Stats ────────────────────────────────────────────────
+        async function loadStats() {
+            const subjectMap = {
+                Mathematics: { el: ELEMENTS.qsMath, q: 0, h: 0 },
+                ESAS: { el: ELEMENTS.qsEsas, q: 0, h: 0 },
+                "Professional EE": { el: ELEMENTS.qsProf, q: 0, h: 0 }
+            };
+            let totalQuestions = 0;
+            let totalHandouts = 0;
+
             try {
-                const q = collectionGroup(db, "questions");
-                const snap = await getDocs(q);
-                const rawQuestions = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
-                
-                // client-side deduplication for the Master List view
-                const seen = new Set();
-                masterQuestions = rawQuestions.filter(q => {
-                    const normalized = (q.questionText || "").toLowerCase().trim();
-                    const hash = `${normalized}|${q.subject}`;
-                    if (seen.has(hash)) return false;
-                    seen.add(hash);
-                    return true;
+                const snap = await getDocs(collection(db, "question_banks"));
+                snap.forEach((bank) => {
+                    const data = bank.data();
+                    const subject = safeSubject(data.subject);
+                    const questionCount = Number(data.questionCount) || 0;
+                    const handoutCount = Number(data.handoutCount) || 0;
+
+                    totalQuestions += questionCount;
+                    totalHandouts += handoutCount;
+                    if (subjectMap[subject]) {
+                        subjectMap[subject].q += questionCount;
+                        subjectMap[subject].h += handoutCount;
+                    }
                 });
-                
-                // Populate topics dropdown
-                const topics = [...new Set(masterQuestions.map(q => q.topic).filter(Boolean))].sort();
-                const topicFilter = document.getElementById("filter-topic");
-                topicFilter.innerHTML = `<option value="all">All Topics</option>` + 
-                    topics.map(t => `<option value="${t}">${t}</option>`).join("");
-                
-                applyMasterFilters();
+
+                ELEMENTS.qsMath.textContent = subjectMap.Mathematics.q;
+                ELEMENTS.qsEsas.textContent = subjectMap.ESAS.q;
+                ELEMENTS.qsProf.textContent = subjectMap["Professional EE"].q;
+                ELEMENTS.qsTotal.textContent = totalQuestions;
+                ELEMENTS.hbTotal.textContent = totalHandouts;
             } catch (err) {
-                tbody.innerHTML = `<tr><td colspan="5" class="text-center py-24 text-danger">Failed to load: ${err.message}</td></tr>`;
+                showToast("Failed to load bank stats: " + err.message, "error");
+                ELEMENTS.qsMath.textContent = "—";
+                ELEMENTS.qsEsas.textContent = "—";
+                ELEMENTS.qsProf.textContent = "—";
+                ELEMENTS.qsTotal.textContent = "—";
+                ELEMENTS.hbTotal.textContent = "—";
             }
         }
 
-        function applyMasterFilters() {
-            const search = document.getElementById("master-search").value.toLowerCase();
-            const category = document.getElementById("filter-category").value;
-            const topic = document.getElementById("filter-topic").value;
+        // Real-time stats listener
+        onSnapshot(query(collection(db, "question_banks")), () => loadStats());
 
-            masterFiltered = masterQuestions.filter(q => {
-                const matchSearch = !search || q.questionText?.toLowerCase().includes(search) || q.topic?.toLowerCase().includes(search);
-                const matchCategory = category === "all" || q.category === category;
-                const matchTopic = topic === "all" || q.topic === topic;
-                const matchSubject = activeSubject === "all" || q.subject === activeSubject;
-                return matchSearch && matchCategory && matchTopic && matchSubject;
-            });
-
-            renderMasterTable();
-        }
-
-        function renderMasterTable() {
-            const tbody = document.getElementById("master-table-body");
-            if (!masterFiltered.length) {
-                tbody.innerHTML = `<tr><td colspan="5" class="text-center py-24 text-muted">No questions found.</td></tr>`;
-                return;
-            }
-
-            tbody.innerHTML = masterFiltered.map(q => `
-                <tr>
-                    <td class="text-sm" style="max-width:340px; white-space:normal;">${q.questionText || "—"}</td>
-                    <td><span class="badge badge-teal">${q.subject || "—"}</span></td>
-                    <td class="text-xs text-muted">${q.topic || "—"}</td>
-                    <td><span class="badge ${q.category === "Computation" ? "badge-blue" : "badge-yellow"}">${q.category || "—"}</span></td>
-                    <td class="fw-600 text-accent">${q.correctAnswer || "—"}</td>
-                </tr>
-            `).join("");
-        }
-
-        document.getElementById("master-search").addEventListener("input", applyMasterFilters);
-        document.getElementById("filter-category").addEventListener("change", applyMasterFilters);
-        document.getElementById("filter-topic").addEventListener("change", applyMasterFilters);
-        document.getElementById("btn-refresh-master").addEventListener("click", loadMasterQuestions);
-        document.getElementById("btn-delete-subject").addEventListener("click", () => deleteQuestionBanks("subject"));
-        document.getElementById("btn-delete-all").addEventListener("click", () => deleteQuestionBanks("all"));
-
-        // Subject filter chips
-        document.querySelectorAll(".chip[data-subject]").forEach(chip => {
-            chip.addEventListener("click", () => {
-                document.querySelectorAll(".chip[data-subject]").forEach(c => c.classList.remove("active"));
-                chip.classList.add("active");
-                activeSubject = chip.dataset.subject;
-                updateDeleteControls();
-                applyMasterFilters();
-            });
-        });
-
-        function updateDeleteControls() {
-            document.getElementById("btn-delete-subject").disabled = activeSubject === "all";
-        }
-
-        // Initialize
-        updateDeleteControls();
-        loadMasterQuestions();
-        loadStats();
-
-        // Real-time listener for stats only now
-        const qStats = query(collection(db, "question_banks"));
-        onSnapshot(qStats, () => loadStats());
-
-        // ─── Upload flow ───────────────────────────────────────────────
-        const openUploadModal = () => {
-            document.getElementById("modal-upload").classList.remove("hidden");
-            selectedFile = null;
-            document.getElementById("selected-file-name").classList.add("hidden");
-            document.getElementById("upload-submit").disabled = true;
-            document.getElementById("upload-status").textContent = "";
-            document.getElementById("upload-progress-bar").classList.add("hidden");
-            document.getElementById("upload-progress-fill").style.width = "0%";
-        };
-
-        document.getElementById("btn-upload").addEventListener("click", openUploadModal);
-        document.getElementById("btn-upload2")?.addEventListener("click", openUploadModal);
-        document.getElementById("upload-close").addEventListener("click", () => document.getElementById("modal-upload").classList.add("hidden"));
-        document.getElementById("upload-cancel").addEventListener("click", () => document.getElementById("modal-upload").classList.add("hidden"));
-
-        // Drop zone
-        const dropZone = document.getElementById("drop-zone");
-        const fileInput = document.getElementById("file-input");
-
-        dropZone.addEventListener("click", () => fileInput.click());
-        dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("dragover"); });
-        dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
-        dropZone.addEventListener("drop", (e) => {
-            e.preventDefault(); dropZone.classList.remove("dragover");
-            if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
-        });
-        fileInput.addEventListener("change", () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
-
-        function handleFile(file) {
-            selectedFile = file;
-            const nameEl = document.getElementById("selected-file-name");
-            nameEl.textContent = file.name;
-            nameEl.classList.remove("hidden");
-            document.getElementById("upload-submit").disabled = false;
+        // ─── Question Bank List ─────────────────────────────────
+        function normalizeQuestionSignature(value) {
+            return String(value || "").toLowerCase().replace(/\s+/g, " ").trim();
         }
 
         function normalizeSubjectName(value) {
@@ -367,11 +648,458 @@
             return normalizeSubjectName(rowSubject) || suggestSubjectFromSheetName(sheetName) || selectedSubject;
         }
 
-        function normalizeQuestionSignature(value) {
-            return String(value || "").toLowerCase().replace(/\s+/g, " ").trim();
+        async function loadMasterQuestions() {
+            ELEMENTS.masterTable.innerHTML = `<tr><td colspan="6" class="text-center py-24"><span class="spinner"></span></td></tr>`;
+
+            try {
+                const snap = await getDocs(collectionGroup(db, "questions"));
+                const normalized = snap.docs
+                    .map((docRef) => ({
+                        _id: docRef.id,
+                        _bankId: docRef.ref.parent.parent.id,
+                        _ref: docRef.ref,
+                        ...docRef.data()
+                    }))
+                    .filter(isQuestionRecord);
+
+                // Client-side dedupe by normalized question + subject
+                const seen = new Set();
+                masterQuestions = normalized.filter((q) => {
+                    const normalizedText = normalizeQuestionSignature(q.questionText || "");
+                    const subject = q.subject || "";
+                    const signature = `${normalizedText}|${subject}`;
+                    if (!normalizedText || seen.has(signature)) return false;
+                    seen.add(signature);
+                    return true;
+                });
+
+                const topics = [...new Set(masterQuestions.map((q) => q.topic).filter(Boolean))].sort();
+                ELEMENTS.filterTopic.innerHTML = `<option value="all">All Topics</option>` + topics.map((topic) => `<option value="${escapeHtml(topic)}">${escapeHtml(topic)}</option>`).join("");
+
+                applyMasterFilters();
+            } catch (err) {
+                ELEMENTS.masterTable.innerHTML = `<tr><td colspan="6" class="text-center py-24 text-danger">Failed to load questions: ${escapeHtml(err.message)}</td></tr>`;
+            }
+        }
+
+        function applyMasterFilters() {
+            const search = toStr(ELEMENTS.masterSearch.value || "").toLowerCase();
+            const category = ELEMENTS.filterCategory.value;
+            const topic = ELEMENTS.filterTopic.value;
+
+            masterFiltered = masterQuestions.filter((item) => {
+                const subject = item.subject || "";
+                const itemTopic = item.topic || "";
+                const question = toStr(item.questionText || "").toLowerCase();
+
+                const matchSearch = !search || question.includes(search) || itemTopic.toLowerCase().includes(search);
+                const matchCategory = category === "all" || item.category === category;
+                const matchTopic = topic === "all" || itemTopic === topic;
+                const matchSubject = activeSubject === "all" || subject === activeSubject;
+
+                return matchSearch && matchCategory && matchTopic && matchSubject;
+            });
+
+            renderMasterTable();
+        }
+
+        function renderMasterTable() {
+            if (!masterFiltered.length) {
+                ELEMENTS.masterTable.innerHTML = `<tr><td colspan="6" class="text-center py-24 text-muted">No questions found.</td></tr>`;
+                return;
+            }
+
+            ELEMENTS.masterTable.innerHTML = masterFiltered.map((q) => {
+                const categoryClass = q.category === "Computation" ? "badge-blue" : "badge-yellow";
+                const id = escapeHtml(q._id);
+                const bankId = escapeHtml(q._bankId);
+
+                return `
+                    <tr>
+                        <td class="text-sm" style="max-width:340px; white-space:normal;">${escapeHtml(q.questionText) || "—"}</td>
+                        <td><span class="badge badge-teal">${escapeHtml(q.subject || "—")}</span></td>
+                        <td class="text-xs text-muted">${escapeHtml(q.topic || "—")}</td>
+                        <td><span class="badge ${categoryClass}">${escapeHtml(q.category || "—")}</span></td>
+                        <td class="fw-600 text-accent">${escapeHtml(q.correctAnswer || "—")}</td>
+                        <td>
+                            <div class="td-actions">
+                                <button class="btn btn-secondary btn-icon btn-sm" data-question-action="edit" data-question-id="${id}" data-question-bank="${bankId}" title="Edit Question" aria-label="Edit Question">✏️</button>
+                                <button class="btn btn-danger btn-icon btn-sm" data-question-action="delete" data-question-id="${id}" data-question-bank="${bankId}" title="Delete Question" aria-label="Delete Question">🗑️</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join("");
+        }
+
+        ELEMENTS.masterTable.addEventListener("click", async (event) => {
+            const actionButton = event.target.closest("[data-question-action]");
+            if (!actionButton) return;
+
+            const questionId = actionButton.dataset.questionId;
+            const bankId = actionButton.dataset.questionBank;
+            const action = actionButton.dataset.questionAction;
+            const record = masterQuestions.find((q) => q._id === questionId && q._bankId === bankId);
+            if (!record) return;
+
+            if (action === "edit") {
+                openQuestionForm(record);
+                return;
+            }
+
+            if (action === "delete") {
+                await deleteQuestion(record);
+            }
+        });
+
+        async function openQuestionForm(existing = null) {
+            currentlyEditingQuestion = existing;
+            const title = document.getElementById("question-form-title");
+            const saveBtn = document.getElementById("question-form-save");
+            const subjectField = document.getElementById("question-form-subject");
+            const sessionField = document.getElementById("question-form-session");
+            const isEditMode = Boolean(existing);
+
+            title.textContent = existing ? "Edit Question" : "Add Question";
+            saveBtn.textContent = existing ? "Update Question" : "Add Question";
+            saveBtn.disabled = false;
+
+            subjectField.value = existing?.subject || "Mathematics";
+            sessionField.value = existing?.sessionName || "";
+            document.getElementById("question-form-topic").value = existing?.topic || "";
+            document.getElementById("question-form-category").value = existing?.category || "";
+            document.getElementById("question-form-text").value = existing?.questionText || "";
+            document.getElementById("question-form-option-a").value = existing?.optionA || "";
+            document.getElementById("question-form-option-b").value = existing?.optionB || "";
+            document.getElementById("question-form-option-c").value = existing?.optionC || "";
+            document.getElementById("question-form-option-d").value = existing?.optionD || "";
+            document.getElementById("question-form-answer").value = existing?.correctAnswer || "";
+            subjectField.disabled = isEditMode;
+            sessionField.disabled = isEditMode;
+
+            document.getElementById("modal-question-form").classList.remove("hidden");
+        }
+
+        document.getElementById("question-form-close").addEventListener("click", () => {
+            document.getElementById("modal-question-form").classList.add("hidden");
+            currentlyEditingQuestion = null;
+        });
+
+        document.getElementById("question-form-cancel").addEventListener("click", () => {
+            document.getElementById("modal-question-form").classList.add("hidden");
+            currentlyEditingQuestion = null;
+        });
+
+        document.getElementById("question-form-save").addEventListener("click", async () => {
+            const btn = document.getElementById("question-form-save");
+            try {
+                setButtonLoading(btn, true, currentlyEditingQuestion ? "Updating…" : "Saving…");
+
+                const payload = {
+                    subject: document.getElementById("question-form-subject").value,
+                    sessionName: document.getElementById("question-form-session").value.trim() || FALLBACK_QUESTION_SESSION,
+                    topic: document.getElementById("question-form-topic").value.trim(),
+                    category: document.getElementById("question-form-category").value.trim(),
+                    questionText: document.getElementById("question-form-text").value.trim(),
+                    optionA: document.getElementById("question-form-option-a").value.trim(),
+                    optionB: document.getElementById("question-form-option-b").value.trim(),
+                    optionC: document.getElementById("question-form-option-c").value.trim(),
+                    optionD: document.getElementById("question-form-option-d").value.trim(),
+                    correctAnswer: document.getElementById("question-form-answer").value
+                };
+
+                if (!payload.questionText || !payload.topic || !payload.optionA || !payload.optionB || !payload.optionC || !payload.optionD || !payload.correctAnswer) {
+                    showToast("Fill all required question fields before saving.", "warning");
+                    return;
+                }
+
+                const validAnswer = ["A", "B", "C", "D"].includes(payload.correctAnswer);
+                if (!validAnswer) {
+                    showToast("Choose a valid correct answer (A-D).", "warning");
+                    return;
+                }
+
+                if (currentlyEditingQuestion) {
+                    const updatePayload = {
+                        subject: payload.subject,
+                        sessionName: payload.sessionName,
+                        topic: payload.topic,
+                        questionText: payload.questionText,
+                        category: payload.category,
+                        optionA: payload.optionA,
+                        optionB: payload.optionB,
+                        optionC: payload.optionC,
+                        optionD: payload.optionD,
+                        correctAnswer: payload.correctAnswer,
+                        updatedAt: serverTimestamp(),
+                        updatedByUid: user.uid || "",
+                        updatedByEmail: user.email
+                    };
+
+                    await updateDoc(currentlyEditingQuestion._ref, updatePayload);
+                    await logActivity(user, "UPDATE_QUESTION", `Updated question: ${payload.questionText.substring(0, 60)}`, {
+                        entityType: "questionBank",
+                        entityId: currentlyEditingQuestion._id,
+                        targetType: "question",
+                        questionText: payload.questionText.substring(0, 200),
+                        subject: payload.subject,
+                        sessionName: payload.sessionName,
+                        operation: "UPDATE"
+                    });
+
+                    showToast("Question updated.", "success");
+                } else {
+                    const bank = await findOrCreateBank({
+                        subject: payload.subject,
+                        sessionName: payload.sessionName,
+                        sourceFileName: null
+                    });
+
+                    const qRef = doc(collection(db, "question_banks", bank.id, "questions"));
+                    await setDoc(qRef, {
+                        ...payload,
+                        itemType: "question",
+                        importSessionId: bank.id,
+                        sourceFileName: payload.sessionName,
+                        uploadedByTeacherId: adminTeacherId,
+                        uploadedByUid: user.uid || "",
+                        uploaderEmail: user.email,
+                        createdAt: serverTimestamp()
+                    });
+
+                    await updateDoc(bank, {
+                        questionCount: increment(1),
+                        subject: payload.subject,
+                        sessionName: payload.sessionName,
+                        uploadedByTeacherId: adminTeacherId,
+                        uploadedByUid: user.uid || "",
+                        uploaderEmail: user.email,
+                        updatedAt: serverTimestamp()
+                    });
+
+                    await logActivity(user, "CREATE_QUESTION", `Created question: ${payload.questionText.substring(0, 60)}`, {
+                        entityType: "questionBank",
+                        targetType: "question",
+                        questionText: payload.questionText.substring(0, 200),
+                        subject: payload.subject,
+                        sessionName: payload.sessionName,
+                        operation: "CREATE"
+                    });
+
+                    showToast("Question added.", "success");
+                }
+
+                document.getElementById("modal-question-form").classList.add("hidden");
+                currentlyEditingQuestion = null;
+                await Promise.all([loadMasterQuestions(), loadStats()]);
+            } catch (err) {
+                showToast("Failed to save question: " + err.message, "error");
+            } finally {
+                setButtonLoading(btn, false);
+            }
+        });
+
+        async function deleteQuestion(record) {
+            const confirmDelete = await showConfirm(`Delete this question permanently?`, "Delete Question", "Delete", true);
+            if (!confirmDelete) return;
+
+            try {
+                const bankRef = doc(db, "question_banks", record._bankId);
+                await deleteDoc(record._ref);
+                await updateDoc(bankRef, {
+                    questionCount: increment(-1),
+                    lastUpdatedAt: serverTimestamp()
+                });
+
+                await logActivity(user, "DELETE_QUESTION", `Deleted question: ${toStr(record.questionText).substring(0, 60)}`, {
+                    entityType: "questionBank",
+                    entityId: record._id,
+                    targetType: "question",
+                    questionText: toStr(record.questionText).substring(0, 200),
+                    operation: "DELETE"
+                });
+
+                showToast("Question deleted.", "success");
+                await Promise.all([loadMasterQuestions(), loadStats()]);
+            } catch (err) {
+                showToast("Error deleting question: " + err.message, "error");
+            }
+        }
+
+        function collectBankScope() {
+            const scope = {};
+            scope.subject = activeSubject;
+            return scope;
+        }
+
+        async function deleteQuestionBanks(scopeType) {
+            if (scopeType === "subject" && activeSubject === "all") {
+                showToast("Select a subject first.", "warning");
+                return;
+            }
+
+            try {
+                const banksRef = collection(db, "question_banks");
+                const bankQuery = scopeType === "subject"
+                    ? query(banksRef, where("subject", "==", activeSubject), where("uploadedByTeacherId", "==", adminTeacherId))
+                    : query(banksRef, where("uploadedByTeacherId", "==", adminTeacherId));
+                const bankSnap = await getDocs(bankQuery);
+
+                const candidateBanks = bankSnap.docs.filter((snap) => (Number(snap.data().questionCount) || 0) > 0);
+                if (!candidateBanks.length) {
+                    const label = scopeType === "subject" ? `${activeSubject} question session` : "question session";
+                    showToast(`No question sessions found for ${label}.`, "info");
+                    return;
+                }
+
+                const button = document.getElementById(scopeType === "subject" ? "btn-delete-subject" : "btn-delete-all");
+                const totalQuestions = candidateBanks.reduce((sum, snap) => sum + Number(snap.data().questionCount || 0), 0);
+
+                const ok = await showConfirm(
+                    `Delete ${candidateBanks.length} question session${candidateBanks.length === 1 ? "" : "s"}${totalQuestions ? ` containing ${totalQuestions} question${totalQuestions === 1 ? "" : "s"}` : ""}? This will remove questions in those sessions.`,
+                    "Delete Question Sessions",
+                    "Delete",
+                    true
+                );
+                if (!ok) return;
+
+                setButtonLoading(button, true, "Deleting…");
+                let deletedQuestions = 0;
+
+                for (const bank of candidateBanks) {
+                    const questionSnap = await getDocs(collection(db, "question_banks", bank.id, "questions"));
+                    const totalInBank = questionSnap.size;
+
+                    for (let i = 0; i < questionSnap.size; i += 450) {
+                        const batch = writeBatch(db);
+                        questionSnap.docs.slice(i, i + 450).forEach((docSnap) => {
+                            batch.delete(docSnap.ref);
+                        });
+                        await batch.commit();
+                    }
+
+                    await updateDoc(bank.ref, {
+                        questionCount: 0,
+                        updatedAt: serverTimestamp()
+                    });
+                    deletedQuestions += totalInBank;
+                }
+
+                await logActivity(user, "DELETE_QUESTION_BANKS", `Deleted ${candidateBanks.length} question sessions`, {
+                    scope: scopeType,
+                    bankCount: candidateBanks.length,
+                    deletedQuestions,
+                    subject: scopeType === "subject" ? activeSubject : null,
+                    operation: "DELETE"
+                });
+
+                showToast(`Deleted ${candidateBanks.length} question session${candidateBanks.length === 1 ? "" : "s"} (${deletedQuestions} questions).`, "success");
+                await Promise.all([loadMasterQuestions(), loadStats()]);
+            } catch (err) {
+                showToast("Error deleting question sessions: " + err.message, "error");
+            } finally {
+                const questionDeleteSubject = document.getElementById("btn-delete-subject");
+                const questionDeleteAll = document.getElementById("btn-delete-all");
+                setButtonLoading(questionDeleteSubject, false);
+                setButtonLoading(questionDeleteAll, false);
+            }
+        }
+
+        async function findOrCreateBank({ subject, sessionName, sourceFileName }) {
+            const normalizedSessionName = toStr(sessionName || FALLBACK_QUESTION_SESSION).trim();
+            const normalizedSource = toStr(sourceFileName || "").trim().toLowerCase();
+
+            const q = query(
+                collection(db, "question_banks"),
+                where("subject", "==", subject),
+                where("uploadedByTeacherId", "==", adminTeacherId)
+            );
+
+            const snap = await getDocs(q);
+            const normalizedSourceFile = normalizedSource.toLowerCase();
+            const existing = snap.docs.find((docSnapshot) => {
+                const data = docSnapshot.data();
+                const existingSession = toStr(data.sessionName).toLowerCase();
+                const existingSource = toStr(data.sourceFileName).toLowerCase();
+                return existingSession === normalizedSessionName.toLowerCase() ||
+                    (normalizedSource && existingSource && existingSource === normalizedSource) ||
+                    (!data.questionCount && !data.handoutCount && existingSession === normalizedSessionName.toLowerCase());
+            });
+
+            if (existing) {
+                return existing.ref;
+            }
+
+            const bankRef = doc(collection(db, "question_banks"));
+            await setDoc(bankRef, {
+                subject,
+                sessionName: normalizedSessionName,
+                sourceFileName: sourceFileName || "",
+                uploaderEmail: user.email,
+                uploadedByTeacherId: adminTeacherId,
+                uploadedByUid: user.uid || "",
+                questionCount: 0,
+                handoutCount: 0,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+            });
+
+            return bankRef;
+        }
+
+        // Question import modal + parser
+        const openUploadModal = () => {
+            document.getElementById("modal-upload").classList.remove("hidden");
+            selectedFile = null;
+            document.getElementById("selected-file-name").classList.add("hidden");
+            document.getElementById("upload-submit").disabled = true;
+            document.getElementById("upload-status").textContent = "";
+            document.getElementById("upload-progress-bar").classList.add("hidden");
+            document.getElementById("upload-progress-fill").style.width = "0%";
+        };
+
+        document.getElementById("btn-upload").addEventListener("click", openUploadModal);
+        document.getElementById("upload-close").addEventListener("click", () => document.getElementById("modal-upload").classList.add("hidden"));
+        document.getElementById("upload-cancel").addEventListener("click", () => document.getElementById("modal-upload").classList.add("hidden"));
+
+        const questionDropZone = document.getElementById("drop-zone");
+        const questionFileInput = document.getElementById("file-input");
+
+        questionDropZone.addEventListener("click", () => questionFileInput.click());
+        questionDropZone.addEventListener("dragover", (event) => {
+            event.preventDefault();
+            questionDropZone.classList.add("dragover");
+        });
+        questionDropZone.addEventListener("dragleave", () => {
+            questionDropZone.classList.remove("dragover");
+        });
+        questionDropZone.addEventListener("drop", (event) => {
+            event.preventDefault();
+            questionDropZone.classList.remove("dragover");
+            if (event.dataTransfer.files?.[0]) handleQuestionFile(event.dataTransfer.files[0]);
+        });
+        questionFileInput.addEventListener("change", () => {
+            if (questionFileInput.files?.[0]) handleQuestionFile(questionFileInput.files[0]);
+        });
+
+        function handleQuestionFile(file) {
+            const extension = toStr(file.name).split(".").pop().toLowerCase();
+            if (!/[.](xlsx|xls|csv)$/.test(`.${extension}`)) {
+                showToast("Only CSV or Excel files are allowed for questions.", "warning");
+                selectedFile = null;
+                document.getElementById("selected-file-name").classList.add("hidden");
+                return;
+            }
+
+            selectedFile = file;
+            const nameEl = document.getElementById("selected-file-name");
+            nameEl.textContent = file.name;
+            nameEl.classList.remove("hidden");
+            document.getElementById("upload-submit").disabled = false;
         }
 
         function findColumnIndices(headers) {
+            const normalizedHeaders = headers.map((header) => String(header || "").toLowerCase().trim());
             const mapping = {};
             const searchPatterns = {
                 "question text": ["question text", "question", "q text", "item"],
@@ -387,24 +1115,15 @@
             };
 
             Object.entries(searchPatterns).forEach(([key, patterns]) => {
-                headers.forEach((header, index) => {
-                    if (patterns.includes(header)) mapping[key] = index;
-                });
-            });
-
-            Object.entries(searchPatterns).forEach(([key, patterns]) => {
-                if (mapping[key] !== undefined) return;
-
-                headers.forEach((header, index) => {
+                normalizedHeaders.forEach((header, index) => {
                     if (mapping[key] !== undefined) return;
 
-                    if (key.startsWith("option")) {
-                        const isShortMatch = header.length <= 2 && patterns.includes(header);
-                        const isLooseMatch = patterns.some((pattern) =>
-                            header.includes(pattern) && !header.includes("question") && !header.includes("answer")
-                        );
-                        if (isShortMatch || isLooseMatch) mapping[key] = index;
-                    } else if (patterns.some((pattern) => header.includes(pattern))) {
+                    if (patterns.includes(header)) {
+                        mapping[key] = index;
+                        return;
+                    }
+
+                    if (patterns.some((pattern) => header.includes(pattern))) {
                         mapping[key] = index;
                     }
                 });
@@ -414,16 +1133,20 @@
         }
 
         function isHeaderValid(mapping) {
-            return ["question text", "option a", "option b", "option c", "option d", "correct answer"]
-                .every((key) => mapping[key] !== undefined);
+            return ["question text", "option a", "option b", "option c", "option d", "correct answer"].every((key) => mapping[key] !== undefined);
         }
 
         function parseWorksheet(worksheet, sheetName, selectedSubject) {
             const json = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false });
-            if (json.length < 2) {
+            if (!Array.isArray(json) || json.length < 2) {
                 return {
                     questions: [],
-                    metadata: { sheetName, detectedSubjects: [], parsedQuestionCount: 0, skippedReason: "Missing header row" }
+                    metadata: {
+                        sheetName,
+                        detectedSubjects: [],
+                        parsedQuestionCount: 0,
+                        skippedReason: "Missing header row"
+                    }
                 };
             }
 
@@ -432,34 +1155,33 @@
             if (!isHeaderValid(colMapping)) {
                 return {
                     questions: [],
-                    metadata: { sheetName, detectedSubjects: [], parsedQuestionCount: 0, skippedReason: "Missing required columns" }
+                    metadata: {
+                        sheetName,
+                        detectedSubjects: [],
+                        parsedQuestionCount: 0,
+                        skippedReason: "Missing required columns"
+                    }
                 };
             }
 
             const detectedSubjects = new Set();
             const questions = [];
-            const rows = json.slice(1).filter((row) =>
-                Array.isArray(row) && row.some((cell) => String(cell ?? "").trim() !== "")
-            );
+            const rows = json.slice(1).filter((row) => Array.isArray(row) && row.some((cell) => String(cell ?? "").trim() !== ""));
 
             rows.forEach((row, index) => {
                 const questionText = String(row[colMapping["question text"]] || "").trim();
                 if (!questionText) return;
-                const correctAnswer = String(row[colMapping["correct answer"]] || "").trim().toUpperCase();
-                if (!correctAnswer) return;
 
-                const rowSubject = colMapping.subject !== undefined
-                    ? String(row[colMapping.subject] || "").trim()
-                    : "";
-                const detectedSubject = resolveDetectedSubject(selectedSubject, rowSubject, sheetName);
+                const rawCorrect = String(row[colMapping["correct answer"]] || "").trim();
+                const correctAnswer = rawCorrect.toUpperCase().charAt(0);
+                if (!["A", "B", "C", "D"].includes(correctAnswer)) return;
+
+                const rowSubject = colMapping.subject !== undefined ? String(row[colMapping.subject] || "").trim() : "";
+                const detectedSubject = resolveDetectedSubject(selectedSubject, rowSubject, sheetName) || selectedSubject;
                 detectedSubjects.add(detectedSubject);
 
-                let topic = colMapping.topic !== undefined
-                    ? String(row[colMapping.topic] || "").trim()
-                    : "";
-                let category = colMapping.category !== undefined
-                    ? String(row[colMapping.category] || "").trim()
-                    : "";
+                let topic = colMapping.topic !== undefined ? String(row[colMapping.topic] || "").trim() : "";
+                let category = colMapping.category !== undefined ? String(row[colMapping.category] || "").trim() : "";
 
                 if (!topic ||
                     topic.toLowerCase() === selectedSubject.toLowerCase() ||
@@ -501,98 +1223,105 @@
             };
         }
 
-        // ─── Spreadsheet Parser (SheetJS) ────────────────────────────────────────────────
+        function mapQuestionForBank(question, sessionName, sourceFileName, subject) {
+            return {
+                ...question,
+                subject,
+                topic: question.topic || "General",
+                sessionName,
+                itemType: "question",
+                importSessionName: sessionName,
+                sourceFileName,
+                importedAt: serverTimestamp(),
+                uploaderEmail: user.email,
+                uploadedByTeacherId: adminTeacherId,
+                uploadedByUid: user.uid || ""
+            };
+        }
+
         document.getElementById("upload-submit").addEventListener("click", async () => {
             if (!selectedFile) return;
+
             const subject = document.getElementById("upload-subject").value;
-            const sessionName = document.getElementById("upload-session-name").value.trim();
-            const btn = document.getElementById("upload-submit");
+            const sessionName = document.getElementById("upload-session-name").value.trim() || selectedFile.name;
+            const uploadBtn = document.getElementById("upload-submit");
             const statusEl = document.getElementById("upload-status");
             const progressBar = document.getElementById("upload-progress-bar");
             const progressFill = document.getElementById("upload-progress-fill");
 
-            setButtonLoading(btn, true, "Uploading…");
+            setButtonLoading(uploadBtn, true, "Uploading…");
             progressBar.classList.remove("hidden");
             progressFill.style.width = "10%";
 
             try {
                 const reader = new FileReader();
-                reader.onload = async (e) => {
+                reader.onload = async (event) => {
                     try {
-                        const data = new Uint8Array(e.target.result);
-                        const workbook = XLSX.read(data, { type: 'array' });
-                        const sheetResults = workbook.SheetNames.map((sheetName) =>
-                            parseWorksheet(workbook.Sheets[sheetName], sheetName, subject)
-                        );
-                        const parsed = sheetResults.flatMap((result) => result.questions);
-                        const validSheetCount = sheetResults.filter((result) => result.metadata.parsedQuestionCount > 0).length;
-                        const skippedSheetCount = sheetResults.filter((result) => result.metadata.skippedReason).length;
+                        const data = new Uint8Array(event.target.result);
+                        const workbook = XLSX.read(data, { type: "array" });
+                        const sheetResults = workbook.SheetNames.map((sheetName) => parseWorksheet(workbook.Sheets[sheetName], sheetName, subject));
+                        const parsed = sheetResults.flatMap((entry) => entry.questions);
+                        const validSheetCount = sheetResults.filter((entry) => entry.metadata.parsedQuestionCount > 0).length;
+                        const skippedSheetCount = sheetResults.filter((entry) => entry.metadata.skippedReason).length;
 
-                        if (!parsed.length) throw new Error("No valid questions found in file.");
+                        if (!parsed.length) {
+                            throw new Error("No valid questions found in file.");
+                        }
 
-                        // ─── Update or Create Logic ───
-                        statusEl.textContent = `Analyzing ${workbook.SheetNames.length} sheets…`;
-                        progressFill.style.width = "20%";
-                        const teacherId = user.teacherId || "ADMIN";
-                        const sourceFileName = selectedFile.name;
-                        const uploadSessionName = sessionName || selectedFile.name;
-                        const existingSnap = await getDocs(collectionGroup(db, "questions"));
+                        const normalizedExisting = await getDocs(collectionGroup(db, "questions"));
                         const existingMap = new Map();
-                        existingSnap.forEach(d => {
-                            const questionData = d.data();
+
+                        normalizedExisting.forEach((docSnap) => {
+                            const record = docSnap.data();
+                            if (!isQuestionRecord(record)) return;
+
                             const sameUploader =
-                                (questionData.uploadedByTeacherId || "") === teacherId ||
-                                (questionData.uploadedByUid || "") === (user.uid || "");
+                                toStr(record.uploadedByTeacherId) === adminTeacherId ||
+                                toStr(record.uploadedByUid) === (user.uid || "");
+
                             if (!sameUploader) return;
 
-                            const key = `${normalizeQuestionSignature(questionData.questionText)}|${questionData.subject}`;
+                            const key = `${normalizeQuestionSignature(record.questionText)}|${toStr(record.subject)}`;
                             if (!existingMap.has(key)) existingMap.set(key, []);
-                            existingMap.get(key).push({ id: d.id, bankId: d.ref.parent.parent.id, data: questionData });
+                            existingMap.get(key).push({
+                                id: docSnap.id,
+                                bankId: docSnap.ref.parent.parent.id,
+                                data: record
+                            });
                         });
 
                         const questionsBySubject = parsed.reduce((groups, question) => {
-                            if (!groups.has(question.subject)) groups.set(question.subject, []);
-                            groups.get(question.subject).push(question);
+                            const normalizedSubject = safeSubject(question.subject || subject);
+                            if (!groups.has(normalizedSubject)) groups.set(normalizedSubject, []);
+                            groups.get(normalizedSubject).push(question);
                             return groups;
                         }, new Map());
 
                         let totalUpdated = 0;
                         let totalCreated = 0;
                         let totalDuplicates = 0;
-                        let importedBankCount = 0;
                         let processedSubjects = 0;
+                        let importedBankCount = 0;
 
                         for (const [subjectName, subjectQuestions] of questionsBySubject.entries()) {
-                            statusEl.textContent = `Processing ${subjectName} bank…`;
-                            const qBank = query(
-                                collection(db, "question_banks"),
-                                where("subject", "==", subjectName),
-                                where("uploadedByTeacherId", "==", teacherId)
-                            );
-                            const bankSnap = await getDocs(qBank);
-                            const existingBankDoc = bankSnap.docs.find((bankDoc) => {
-                                const bankData = bankDoc.data();
-                                const bankSourceFileName = (bankData.sourceFileName || "").trim().toLowerCase();
-                                const bankSessionName = (bankData.sessionName || "").trim().toLowerCase();
-                                const normalizedSourceFileName = sourceFileName.trim().toLowerCase();
-                                return bankSourceFileName === normalizedSourceFileName ||
-                                    (!bankSourceFileName && bankSessionName === uploadSessionName.trim().toLowerCase());
+                            statusEl.textContent = `Processing ${subjectName} session…`;
+                            const bankRef = await findOrCreateBank({
+                                subject: subjectName,
+                                sessionName,
+                                sourceFileName: selectedFile.name
                             });
 
-                            const bankSessionRef = existingBankDoc
-                                ? existingBankDoc.ref
-                                : doc(collection(db, "question_banks"));
+                            const bankQuestionsSnap = await getDocs(collection(db, "question_banks", bankRef.id, "questions"));
                             const bankQuestionMap = new Map();
 
-                            if (existingBankDoc) {
-                                const bankQuestionsSnap = await getDocs(collection(db, "question_banks", bankSessionRef.id, "questions"));
-                                bankQuestionsSnap.forEach((questionDoc) => {
-                                    const questionData = questionDoc.data();
-                                    const key = `${normalizeQuestionSignature(questionData.questionText)}|${subjectName}`;
-                                    if (!bankQuestionMap.has(key)) bankQuestionMap.set(key, []);
-                                    bankQuestionMap.get(key).push({ id: questionDoc.id });
-                                });
-                            }
+                            bankQuestionsSnap.forEach((docSnap) => {
+                                const questionData = docSnap.data();
+                                if (!isQuestionRecord(questionData)) return;
+
+                                const key = `${normalizeQuestionSignature(questionData.questionText)}|${subjectName}`;
+                                if (!bankQuestionMap.has(key)) bankQuestionMap.set(key, []);
+                                bankQuestionMap.get(key).push(docSnap.id);
+                            });
 
                             const seenInFile = new Set();
                             const toUpdate = [];
@@ -605,11 +1334,10 @@
                                     duplicateCount++;
                                     return;
                                 }
-
                                 seenInFile.add(key);
 
                                 if (bankQuestionMap.has(key)) {
-                                    toUpdate.push({ existingDocs: bankQuestionMap.get(key), newData: question });
+                                    toUpdate.push({ ids: bankQuestionMap.get(key), newData: question });
                                 } else if (existingMap.has(key)) {
                                     duplicateCount++;
                                 } else {
@@ -618,248 +1346,874 @@
                             });
 
                             totalDuplicates += duplicateCount;
-                            if (toUpdate.length === 0 && toCreate.length === 0) {
+
+                            if (!toUpdate.length && !toCreate.length) {
                                 processedSubjects++;
-                                progressFill.style.width = `${20 + (processedSubjects / questionsBySubject.size) * 80}%`;
                                 continue;
                             }
 
                             importedBankCount++;
-                            const currentCount = existingBankDoc?.data().questionCount || 0;
-                            const metadataBatch = writeBatch(db);
-                            metadataBatch.set(bankSessionRef, {
-                                subject: subjectName,
-                                sessionName: uploadSessionName,
-                                sourceFileName,
-                                importedAt: serverTimestamp(),
-                                uploaderEmail: user.email,
-                                uploadedByTeacherId: teacherId,
-                                uploadedByUid: user.uid || "",
-                                questionCount: currentCount + toCreate.length
-                            }, { merge: true });
-                            await metadataBatch.commit();
 
                             if (toUpdate.length > 0) {
                                 statusEl.textContent = `Updating ${toUpdate.length} ${subjectName} questions…`;
-                                for (let i = 0; i < toUpdate.length; i += 500) {
+                                for (let index = 0; index < toUpdate.length; index += 500) {
+                                    const chunk = toUpdate.slice(index, index + 500);
                                     const batch = writeBatch(db);
-                                    const chunk = toUpdate.slice(i, i + 500);
+
                                     chunk.forEach((item) => {
-                                        item.existingDocs.forEach((docInfo) => {
-                                            const qRef = doc(db, "question_banks", bankSessionRef.id, "questions", docInfo.id);
-                                            batch.update(qRef, {
-                                                ...item.newData,
-                                                subject: subjectName,
-                                                sessionName: uploadSessionName,
-                                                importSessionId: bankSessionRef.id,
-                                                sourceFileName,
+                                        item.ids.forEach((docId) => {
+                                            const updateRef = doc(db, "question_banks", bankRef.id, "questions", docId);
+                                            batch.update(updateRef, {
+                                                ...mapQuestionForBank(item.newData, sessionName, selectedFile.name, subjectName),
                                                 updatedAt: serverTimestamp(),
-                                                lastUpdatedBy: user.email
+                                                updatedBy: user.email
                                             });
                                         });
                                     });
+
                                     await batch.commit();
                                 }
                             }
 
                             if (toCreate.length > 0) {
-                                statusEl.textContent = `Adding ${toCreate.length} new ${subjectName} questions…`;
-                                for (let i = 0; i < toCreate.length; i += 500) {
+                                statusEl.textContent = `Adding ${toCreate.length} ${subjectName} questions…`;
+                                for (let index = 0; index < toCreate.length; index += 500) {
                                     const batch = writeBatch(db);
-                                    const chunk = toCreate.slice(i, i + 500);
+                                    const chunk = toCreate.slice(index, index + 500);
+
                                     chunk.forEach((question) => {
-                                        const qRef = doc(collection(db, "question_banks", bankSessionRef.id, "questions"));
-                                        batch.set(qRef, {
-                                            ...question,
-                                            subject: subjectName,
-                                            sessionName: uploadSessionName,
-                                            importSessionId: bankSessionRef.id,
-                                            sourceFileName,
-                                            importedAt: serverTimestamp(),
-                                            uploaderEmail: user.email,
-                                            uploadedByTeacherId: teacherId,
-                                            uploadedByUid: user.uid || ""
-                                        });
+                                        const qRef = doc(collection(db, "question_banks", bankRef.id, "questions"));
+                                        batch.set(qRef, mapQuestionForBank(question, sessionName, selectedFile.name, subjectName));
                                     });
                                     await batch.commit();
                                 }
+
+                                await updateDoc(bankRef, {
+                                    questionCount: increment(toCreate.length),
+                                    subject: subjectName,
+                                    sessionName,
+                                    sourceFileName: selectedFile.name,
+                                    uploadedByTeacherId: adminTeacherId,
+                                    uploadedByUid: user.uid || "",
+                                    uploaderEmail: user.email,
+                                    updatedAt: serverTimestamp()
+                                });
+
+                                totalCreated += toCreate.length;
                             }
 
-                            totalUpdated += toUpdate.length;
-                            totalCreated += toCreate.length;
+                            if (toUpdate.length > 0) {
+                                totalUpdated += toUpdate.length;
+                            }
+
                             processedSubjects++;
-                            progressFill.style.width = `${20 + (processedSubjects / questionsBySubject.size) * 80}%`;
+                            progressFill.style.width = `${Math.min(100, 20 + Math.round((processedSubjects / questionsBySubject.size) * 80))}%`;
                         }
 
-                        if (totalCreated === 0 && totalUpdated === 0) {
+                        if (!totalCreated && !totalUpdated) {
                             throw new Error("No valid questions found to process.");
                         }
 
-                        progressFill.style.width = "100%";
                         const sheetSummary = `${validSheetCount} sheets${skippedSheetCount ? `, ${skippedSheetCount} skipped` : ""}`;
+                        const duplicateMessage = totalDuplicates ? `${totalDuplicates} duplicates skipped.` : "";
+
+                        progressFill.style.width = "100%";
                         statusEl.textContent = `✅ Processed ${importedBankCount} subject banks from ${sheetSummary}: ${totalUpdated} updated, ${totalCreated} added.`;
-                        
-                        // Log activity
+
                         await logActivity(user, "UPLOAD_QUESTIONS", `Processed ${totalUpdated + totalCreated} questions across ${importedBankCount} subject banks from ${sheetSummary}.`, {
+                            operation: "CREATE",
+                            total: totalUpdated + totalCreated,
                             updated: totalUpdated,
                             added: totalCreated,
                             duplicatesSkipped: totalDuplicates,
-                            total: totalUpdated + totalCreated,
-                            subjectBanks: importedBankCount,
-                            selectedSubject: subject,
-                            sessionName: uploadSessionName,
-                            sourceFileName,
-                            validSheetCount,
+                            importedBanks: importedBankCount,
+                            sessionName: sessionName,
+                            sourceFileName: selectedFile.name,
                             skippedSheetCount
                         });
 
-                        const duplicateSuffix = totalDuplicates ? ` ${totalDuplicates} duplicates skipped.` : "";
-                        showToast(`Processed ${importedBankCount} subject banks: ${totalUpdated} updated, ${totalCreated} added.${duplicateSuffix}`, "success");
+                        showToast(`Processed ${importedBankCount} subject banks: ${totalUpdated} updated, ${totalCreated} added. ${duplicateMessage}`, "success");
+                        await Promise.all([loadMasterQuestions(), loadStats()]);
+
                         setTimeout(() => {
                             document.getElementById("modal-upload").classList.add("hidden");
-                            loadMasterQuestions(); // Refresh list
-                        }, 2000);
-
+                        }, 1200);
                     } catch (err) {
                         showToast("Upload failed: " + err.message, "error");
-                        statusEl.textContent = "❌ " + err.message;
+                        statusEl.textContent = `❌ ${err.message}`;
                     } finally {
-                        setButtonLoading(btn, false);
+                        setButtonLoading(uploadBtn, false);
                     }
                 };
+
                 reader.readAsArrayBuffer(selectedFile);
             } catch (err) {
                 showToast("Upload failed: " + err.message, "error");
-                statusEl.textContent = "❌ " + err.message;
-                setButtonLoading(btn, false);
+                statusEl.textContent = `❌ ${err.message}`;
+                setButtonLoading(uploadBtn, false);
             }
         });
 
-        // ─── Delete question banks ─────────────────────────────────────
-        async function getQuestionBankDocsForDelete(scope) {
-            const banksRef = collection(db, "question_banks");
-            const bankQuery = scope === "subject"
-                ? query(banksRef, where("subject", "==", activeSubject))
-                : query(banksRef);
-            const snap = await getDocs(bankQuery);
-            return snap.docs;
-        }
-
-        async function deleteQuestionBankDoc(bankDoc) {
-            const questionsSnap = await getDocs(collection(db, "question_banks", bankDoc.id, "questions"));
-            const questionDocs = questionsSnap.docs;
-
-            for (let i = 0; i < questionDocs.length; i += 450) {
-                const batch = writeBatch(db);
-                questionDocs.slice(i, i + 450).forEach(d => batch.delete(d.ref));
-                await batch.commit();
+        // ─── Handouts ─────────────────────────────────────
+        function validateHandoutFile(file) {
+            if (!file) {
+                return "Select a file to upload.";
             }
 
-            const batch = writeBatch(db);
-            batch.delete(bankDoc.ref);
-            await batch.commit();
+            const maxBytes = MAX_HANDOUT_FILE_MB * 1024 * 1024;
+            if ((file?.size || 0) > maxBytes) {
+                return `File is too large. Maximum ${MAX_HANDOUT_FILE_MB}MB.`;
+            }
 
-            return questionsSnap.size;
+            return "";
         }
 
-        async function deleteQuestionBanks(scope) {
-            if (scope === "subject" && activeSubject === "all") {
+        const sanitizeStoragePath = (value) => toStr(value).toLowerCase().replace(/[^a-z0-9._-]+/g, "_");
+
+        function createHandoutUploadError(code, message) {
+            const error = new Error(message);
+            error.code = code;
+            return error;
+        }
+
+        function handoutUploadErrorMessage(error) {
+            switch (error?.code) {
+                case "storage/bucket-not-found":
+                case "storage/no-default-bucket":
+                    return "Firebase Storage is not set up. Open Firebase Console → Storage, create the default bucket, then retry.";
+                case "storage/quota-exceeded":
+                    return "Firebase Storage is unavailable for this billing plan. Upgrade the project to Blaze, then retry.";
+                case "storage/unauthenticated":
+                    return "Your Firebase session expired. Sign in again, then retry the upload.";
+                case "storage/unauthorized":
+                case "storage/unauthorized-app":
+                    return "Firebase Storage rules blocked the upload. Allow signed-in admins to write under handouts/.";
+                case "storage/retry-limit-exceeded":
+                case "handout/upload-stalled":
+                case "handout/upload-timeout":
+                    return "Firebase Storage did not respond. Confirm Storage is enabled and the project is on the Blaze plan, then retry.";
+                default: {
+                    const detail = toStr(error?.message).toLowerCase();
+                    if (detail.includes("billing") || detail.includes("blaze") || detail.includes("quota")) {
+                        return "Firebase Storage billing is not active. Upgrade the project to Blaze, then retry.";
+                    }
+                    if (detail.includes("bucket") && detail.includes("not found")) {
+                        return "The Firebase Storage bucket does not exist. Open Firebase Console → Storage and finish setup.";
+                    }
+                    return error?.message || "The handout could not be uploaded. Please try again.";
+                }
+            }
+        }
+
+        function uploadHandoutFile({ file, fileRef, progressFill, statusEl }) {
+            const uploadTask = uploadBytesResumable(fileRef, file, {
+                contentType: file.type || "application/octet-stream"
+            });
+            activeHandoutUploadTask = uploadTask;
+
+            return new Promise((resolve, reject) => {
+                let settled = false;
+                let lastTransferredBytes = 0;
+                let stallTimer = null;
+
+                const cleanup = () => {
+                    window.clearTimeout(stallTimer);
+                    window.clearTimeout(maxTimer);
+                    if (activeHandoutUploadTask === uploadTask) activeHandoutUploadTask = null;
+                };
+
+                const fail = (error) => {
+                    if (settled) return;
+                    settled = true;
+                    cleanup();
+                    reject(error);
+                };
+
+                const finish = (result) => {
+                    if (settled) return;
+                    settled = true;
+                    cleanup();
+                    resolve(result);
+                };
+
+                const armStallTimer = () => {
+                    window.clearTimeout(stallTimer);
+                    stallTimer = window.setTimeout(() => {
+                        fail(createHandoutUploadError(
+                            "handout/upload-stalled",
+                            "No upload progress was received for 30 seconds."
+                        ));
+                        uploadTask.cancel();
+                    }, HANDOUT_UPLOAD_STALL_MS);
+                };
+
+                const maxTimer = window.setTimeout(() => {
+                    fail(createHandoutUploadError(
+                            "handout/upload-timeout",
+                            "The upload exceeded the five-minute limit."
+                    ));
+                    uploadTask.cancel();
+                }, HANDOUT_UPLOAD_MAX_MS);
+
+                armStallTimer();
+                uploadTask.on("state_changed", (snapshot) => {
+                    if (snapshot.bytesTransferred > lastTransferredBytes) {
+                        lastTransferredBytes = snapshot.bytesTransferred;
+                        armStallTimer();
+                    }
+
+                    const uploadRatio = snapshot.totalBytes
+                        ? snapshot.bytesTransferred / snapshot.totalBytes
+                        : 0;
+                    const uploadPercent = Math.round(uploadRatio * 100);
+                    progressFill.style.width = `${10 + (uploadRatio * 75)}%`;
+                    statusEl.textContent = `Uploading file… ${uploadPercent}%`;
+                }, fail, async () => {
+                    window.clearTimeout(stallTimer);
+                    if (activeHandoutUploadTask === uploadTask) activeHandoutUploadTask = null;
+                    progressFill.style.width = "88%";
+                    statusEl.textContent = "Finalizing file…";
+
+                    try {
+                        const fileUrl = await getDownloadURL(uploadTask.snapshot.ref);
+                        finish({ fileUrl, fileName: file.name });
+                    } catch (error) {
+                        fail(error);
+                    }
+                });
+            });
+        }
+
+        function openHandoutModal(existing = null) {
+            if (handoutSaveInProgress) return;
+            handoutUploadCanceledByUser = false;
+            currentlyEditingHandout = existing;
+            const modalTitle = document.getElementById("handout-modal-title");
+            const saveButton = document.getElementById("handout-save");
+            const subjectField = document.getElementById("handout-subject");
+            const isEditMode = Boolean(existing);
+
+            document.getElementById("handout-edit-id").value = existing?._id || "";
+            document.getElementById("handout-edit-bank-id").value = existing?._bankId || "";
+            subjectField.value = existing?.subject || "Mathematics";
+            document.getElementById("handout-title").value = existing?.title || "";
+            document.getElementById("selected-handout-file-name").textContent = existing?.fileName || "";
+            subjectField.disabled = isEditMode;
+
+            selectedHandoutFile = null;
+            if (existing?.fileName) {
+                document.getElementById("selected-handout-file-name").classList.remove("hidden");
+            } else {
+                document.getElementById("selected-handout-file-name").classList.add("hidden");
+            }
+
+            modalTitle.textContent = existing ? "Edit Handout" : "Upload Handout";
+            saveButton.textContent = existing ? "Update Handout" : "Upload Handout";
+            saveButton.disabled = false;
+            document.getElementById("handout-status").textContent = "";
+            document.getElementById("handout-progress-bar").classList.add("hidden");
+            document.getElementById("handout-progress-fill").style.width = "0%";
+            document.getElementById("modal-handout-upload").classList.remove("hidden");
+        }
+
+        const handoutDropZone = document.getElementById("handout-drop-zone");
+        const handoutFileInput = document.getElementById("handout-file-input");
+
+        function dismissHandoutModal() {
+            if (activeHandoutUploadTask) {
+                handoutUploadCanceledByUser = true;
+                activeHandoutUploadTask.cancel();
+                document.getElementById("modal-handout-upload").classList.add("hidden");
+                return;
+            }
+
+            if (handoutSaveInProgress) {
+                showToast("Finishing the handout save. Please wait a moment.", "info");
+                return;
+            }
+
+            document.getElementById("modal-handout-upload").classList.add("hidden");
+            currentlyEditingHandout = null;
+            selectedHandoutFile = null;
+            handoutFileInput.value = "";
+        }
+
+        document.getElementById("btn-upload-handout").addEventListener("click", () => openHandoutModal());
+        document.getElementById("handout-close").addEventListener("click", dismissHandoutModal);
+        document.getElementById("handout-cancel").addEventListener("click", dismissHandoutModal);
+
+        handoutDropZone.addEventListener("click", () => handoutFileInput.click());
+        handoutDropZone.addEventListener("dragover", (event) => {
+            event.preventDefault();
+            handoutDropZone.classList.add("dragover");
+        });
+        handoutDropZone.addEventListener("dragleave", () => handoutDropZone.classList.remove("dragover"));
+        handoutDropZone.addEventListener("drop", (event) => {
+            event.preventDefault();
+            handoutDropZone.classList.remove("dragover");
+            if (event.dataTransfer.files?.[0]) handleHandoutFile(event.dataTransfer.files[0]);
+        });
+        handoutFileInput.addEventListener("change", () => {
+            if (handoutFileInput.files?.[0]) handleHandoutFile(handoutFileInput.files[0]);
+        });
+
+        function handleHandoutFile(file) {
+            const error = validateHandoutFile(file);
+            if (error) {
+                showToast(error, "warning");
+                selectedHandoutFile = null;
+                document.getElementById("selected-handout-file-name").classList.add("hidden");
+                return;
+            }
+
+            selectedHandoutFile = file;
+            const fileNameEl = document.getElementById("selected-handout-file-name");
+            fileNameEl.textContent = file.name;
+            fileNameEl.classList.remove("hidden");
+        }
+
+        async function findOrCreateHandoutBank({ subject, sourceFileName }) {
+            const cachedBankId = handoutBankCache.get(subject);
+            if (cachedBankId) return doc(db, "question_banks", cachedBankId);
+
+            const normalizedSessionName = FALLBACK_HANDOUT_SESSION;
+            const q = query(
+                collection(db, "question_banks"),
+                where("subject", "==", subject),
+                where("uploadedByTeacherId", "==", adminTeacherId)
+            );
+
+            const snap = await getDocs(q);
+            const matched = snap.docs.find((docSnap) => {
+                const data = docSnap.data();
+                return toStr(data.sessionName).trim() === normalizedSessionName ||
+                    (toStr(data.sessionName).trim() === "" && toStr(data.sourceFileName).trim() === toStr(sourceFileName || "").trim());
+            });
+
+            if (matched) {
+                handoutBankCache.set(subject, matched.id);
+                return matched.ref;
+            }
+
+            const bankRef = doc(collection(db, "question_banks"));
+            await setDoc(bankRef, {
+                subject,
+                sessionName: normalizedSessionName,
+                sourceFileName: sourceFileName || "",
+                uploaderEmail: user.email,
+                uploadedByTeacherId: adminTeacherId,
+                uploadedByUid: user.uid || "",
+                questionCount: 0,
+                handoutCount: 0,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+            });
+
+            handoutBankCache.set(subject, bankRef.id);
+            return bankRef;
+        }
+
+        document.getElementById("handout-save").addEventListener("click", async () => {
+            const button = document.getElementById("handout-save");
+            const editingHandout = currentlyEditingHandout;
+            const uploadFile = selectedHandoutFile;
+            let canceledDuringSave = false;
+
+            try {
+                const subject = document.getElementById("handout-subject").value;
+                const title = document.getElementById("handout-title").value.trim();
+                const sessionName = editingHandout?.sessionName || FALLBACK_HANDOUT_SESSION;
+                const notes = editingHandout?.notes || "";
+                const handoutType = editingHandout?.handoutType || "Study Guide";
+
+                if (!title) {
+                    showToast("Handout title is required.", "warning");
+                    return;
+                }
+
+                if (!editingHandout && !uploadFile) {
+                    showToast("Please choose a file to upload.", "warning");
+                    return;
+                }
+
+                const isNew = !editingHandout;
+                handoutSaveInProgress = true;
+                setButtonLoading(button, true, isNew ? "Uploading…" : "Saving…");
+                document.getElementById("handout-progress-bar").classList.remove("hidden");
+                const progressFill = document.getElementById("handout-progress-fill");
+                const statusEl = document.getElementById("handout-status");
+                progressFill.style.width = "10%";
+                statusEl.textContent = uploadFile ? "Preparing file upload…" : "Saving changes…";
+
+                let fileName = editingHandout?.fileName || "";
+                let fileUrl = editingHandout?.fileUrl || "";
+                let storagePath = editingHandout?.storagePath || "";
+                let bankRef = isNew
+                    ? null
+                    : doc(db, "question_banks", editingHandout._bankId);
+                let savedHandout = null;
+
+                if (uploadFile) {
+                    const err = validateHandoutFile(uploadFile);
+                    if (err) {
+                        throw new Error(err);
+                    }
+
+                    if (isNew) {
+                        bankRef = await findOrCreateHandoutBank({
+                            subject,
+                            sourceFileName: uploadFile.name
+                        });
+                    }
+
+                    storagePath = `handouts/${bankRef.id}/${Date.now()}_${sanitizeStoragePath(uploadFile.name)}`;
+                    const uploadedFileRef = storageRef(storage, storagePath);
+                    const uploadResult = await uploadHandoutFile({
+                        file: uploadFile,
+                        fileRef: uploadedFileRef,
+                        progressFill,
+                        statusEl
+                    });
+                    fileUrl = uploadResult.fileUrl;
+                    fileName = uploadResult.fileName;
+                    progressFill.style.width = "90%";
+                    statusEl.textContent = "Saving handout…";
+                }
+
+                if (isNew) {
+                    if (!bankRef) {
+                        bankRef = await findOrCreateHandoutBank({ subject, sourceFileName: fileName });
+                    }
+
+                    const hRef = doc(collection(db, "question_banks", bankRef.id, "handouts"));
+                    const catalogRef = doc(db, HANDOUT_CATALOG_COLLECTION, hRef.id);
+                    const write = writeBatch(db);
+
+                    write.set(hRef, {
+                        title,
+                        subject,
+                        sessionName,
+                        handoutType,
+                        notes,
+                        fileName,
+                        fileUrl,
+                        storagePath,
+                        itemType: "handout",
+                        sourceFileName: fileName,
+                        uploadedByTeacherId: adminTeacherId,
+                        uploadedByUid: user.uid || "",
+                        uploaderEmail: user.email,
+                        createdAt: serverTimestamp(),
+                        updatedAt: serverTimestamp()
+                    });
+
+                    write.update(bankRef, {
+                        handoutCount: increment(1),
+                        subject,
+                        sessionName,
+                        uploaderEmail: user.email,
+                        uploadedByTeacherId: adminTeacherId,
+                        uploadedByUid: user.uid || "",
+                        updatedAt: serverTimestamp()
+                    });
+
+                    write.set(catalogRef, buildHandoutCatalogPayload({
+                        handoutId: hRef.id,
+                        bankId: bankRef.id,
+                        title,
+                        subject,
+                        sessionName,
+                        handoutType,
+                        notes,
+                        fileName,
+                        fileUrl,
+                        storagePath,
+                        sourceFileName: fileName,
+                        fileSize: uploadFile?.size,
+                        mimeType: uploadFile?.type || "",
+                        isCreate: true
+                    }), { merge: true });
+
+                    progressFill.style.width = "94%";
+                    await write.commit();
+                    progressFill.style.width = "100%";
+                    statusEl.textContent = "Upload complete.";
+                    savedHandout = {
+                        _id: hRef.id,
+                        _bankId: bankRef.id,
+                        _ref: hRef,
+                        title,
+                        subject,
+                        sessionName,
+                        handoutType,
+                        notes,
+                        fileName,
+                        fileUrl,
+                        storagePath,
+                        sourceFileName: fileName,
+                        fileSize: uploadFile?.size || 0,
+                        mimeType: uploadFile?.type || "",
+                        createdAt: new Date(),
+                        updatedAt: new Date()
+                    };
+
+                    void logActivity(user, "CREATE_HANDOUT", `Uploaded handout: ${title}`, {
+                        entityType: "handout",
+                        entityId: hRef.id,
+                        targetType: "handout",
+                        subject,
+                        sessionName,
+                        handoutType,
+                        operation: "CREATE"
+                    }).catch((auditError) => {
+                        console.warn("Handout upload audit failed:", auditError);
+                    });
+
+                    showToast("Handout uploaded successfully.", "success");
+                } else {
+                    const handoutRef = doc(db, "question_banks", editingHandout._bankId, "handouts", editingHandout._id);
+                    const catalogRef = doc(db, HANDOUT_CATALOG_COLLECTION, editingHandout._id);
+                    const oldStoragePath = editingHandout.storagePath;
+                    const write = writeBatch(db);
+
+                    write.update(handoutRef, {
+                        title,
+                        subject,
+                        sessionName,
+                        handoutType,
+                        notes,
+                        fileName,
+                        fileUrl,
+                        storagePath,
+                        updatedAt: serverTimestamp(),
+                        updatedByUid: user.uid || "",
+                        updatedByEmail: user.email
+                    });
+
+                    write.set(catalogRef, buildHandoutCatalogPayload({
+                        handoutId: editingHandout._id,
+                        bankId: editingHandout._bankId,
+                        title,
+                        subject,
+                        sessionName,
+                        handoutType,
+                        notes,
+                        fileName,
+                        fileUrl,
+                        storagePath,
+                        sourceFileName: fileName,
+                        fileSize: uploadFile?.size ?? editingHandout?.fileSize ?? 0,
+                        mimeType: uploadFile?.type || editingHandout?.mimeType || ""
+                    }), { merge: true });
+
+                    progressFill.style.width = "94%";
+                    await write.commit();
+                    progressFill.style.width = "100%";
+                    statusEl.textContent = "Changes saved.";
+                    savedHandout = {
+                        ...editingHandout,
+                        title,
+                        subject,
+                        sessionName,
+                        handoutType,
+                        notes,
+                        fileName,
+                        fileUrl,
+                        storagePath,
+                        sourceFileName: fileName,
+                        fileSize: uploadFile?.size ?? editingHandout?.fileSize ?? 0,
+                        mimeType: uploadFile?.type || editingHandout?.mimeType || "",
+                        updatedAt: new Date()
+                    };
+
+                    if (uploadFile && oldStoragePath && oldStoragePath !== storagePath) {
+                        void deleteObject(storageRef(storage, oldStoragePath)).catch(() => {
+                            // Old file cleanup is best-effort and must not delay the saved state.
+                        });
+                    }
+
+                    void logActivity(user, "UPDATE_HANDOUT", `Updated handout: ${title}`, {
+                        entityType: "handout",
+                        entityId: editingHandout._id,
+                        targetType: "handout",
+                        subject,
+                        sessionName,
+                        handoutType,
+                        operation: "UPDATE"
+                    }).catch((auditError) => {
+                        console.warn("Handout update audit failed:", auditError);
+                    });
+
+                    showToast("Handout updated.", "success");
+                }
+
+                if (savedHandout) {
+                    const existingIndex = masterHandouts.findIndex((handout) =>
+                        handout._id === savedHandout._id && handout._bankId === savedHandout._bankId
+                    );
+                    if (existingIndex >= 0) {
+                        masterHandouts.splice(existingIndex, 1, savedHandout);
+                    } else {
+                        masterHandouts.unshift(savedHandout);
+                    }
+                    applyHandoutFilters();
+                }
+
+                document.getElementById("modal-handout-upload").classList.add("hidden");
+                currentlyEditingHandout = null;
+                selectedHandoutFile = null;
+                handoutFileInput.value = "";
+                void loadStats();
+            } catch (err) {
+                canceledDuringSave = handoutUploadCanceledByUser || err?.code === "storage/canceled";
+                if (canceledDuringSave) {
+                    document.getElementById("modal-handout-upload").classList.add("hidden");
+                    showToast("Handout upload canceled.", "info");
+                } else {
+                    const message = handoutUploadErrorMessage(err);
+                    showToast(message, "error");
+                    document.getElementById("handout-status").textContent = `❌ ${message}`;
+                }
+            } finally {
+                activeHandoutUploadTask = null;
+                handoutSaveInProgress = false;
+                setButtonLoading(button, false);
+
+                if (canceledDuringSave) {
+                    currentlyEditingHandout = null;
+                    selectedHandoutFile = null;
+                    handoutFileInput.value = "";
+                }
+                handoutUploadCanceledByUser = false;
+            }
+        });
+
+        async function loadHandouts() {
+            ELEMENTS.handoutTable.innerHTML = `<tr><td colspan="5" class="text-center py-24"><span class="spinner"></span></td></tr>`;
+
+            try {
+                const snap = await getDocs(collectionGroup(db, "handouts"));
+                masterHandouts = snap.docs
+                    .map(mapNestedHandoutDoc)
+                    .filter(Boolean);
+
+                applyHandoutFilters();
+            } catch (err) {
+                ELEMENTS.handoutTable.innerHTML = `<tr><td colspan="5" class="text-center py-24 text-danger">Failed to load handouts: ${escapeHtml(err.message)}</td></tr>`;
+            }
+        }
+
+        function applyHandoutFilters() {
+            const search = toStr(ELEMENTS.handoutSearch.value || "").toLowerCase();
+
+            handoutFiltered = masterHandouts.filter((handout) => {
+                const subject = handout.subject || "";
+                const title = toStr(handout.title || "").toLowerCase();
+                const fileName = toStr(handout.fileName || "").toLowerCase();
+
+                const matchSearch = !search || title.includes(search) || fileName.includes(search);
+                const matchSubject = activeSubject === "all" || subject === activeSubject;
+
+                return matchSearch && matchSubject;
+            });
+
+            renderHandoutTable();
+        }
+
+        function renderHandoutTable() {
+            if (!handoutFiltered.length) {
+                ELEMENTS.handoutTable.innerHTML = `<tr><td colspan="5" class="text-center py-24 text-muted">No handouts found.</td></tr>`;
+                return;
+            }
+
+            ELEMENTS.handoutTable.innerHTML = handoutFiltered.map((handout) => {
+                const id = escapeHtml(handout._id);
+                const bankId = escapeHtml(handout._bankId);
+                const url = escapeHtml(handout.fileUrl || "");
+                const link = url ? `<a href="${url}" target="_blank" rel="noreferrer">Open</a>` : "—";
+
+                return `
+                    <tr>
+                        <td class="text-sm" style="max-width:260px; white-space:normal;">${escapeHtml(handout.title || "—")}</td>
+                        <td><span class="badge badge-teal">${escapeHtml(handout.subject || "—")}</span></td>
+                        <td>${link}</td>
+                        <td>${formatDate(handout.updatedAt || handout.createdAt)}</td>
+                        <td>
+                            <div class="td-actions">
+                                <button class="btn btn-secondary btn-icon btn-sm" data-handout-action="edit" data-handout-id="${id}" data-handout-bank="${bankId}" title="Edit Handout" aria-label="Edit Handout">✏️</button>
+                                <button class="btn btn-danger btn-icon btn-sm" data-handout-action="delete" data-handout-id="${id}" data-handout-bank="${bankId}" title="Delete Handout" aria-label="Delete Handout">🗑️</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join("");
+        }
+
+        ELEMENTS.handoutTable.addEventListener("click", async (event) => {
+            const actionButton = event.target.closest("[data-handout-action]");
+            if (!actionButton) return;
+
+            const action = actionButton.dataset.handoutAction;
+            const handoutId = actionButton.dataset.handoutId;
+            const bankId = actionButton.dataset.handoutBank;
+            const record = masterHandouts.find((h) => h._id === handoutId && h._bankId === bankId);
+            if (!record) return;
+
+            if (action === "edit") {
+                openHandoutModal(record);
+                return;
+            }
+
+            if (action === "delete") {
+                const confirmDelete = await showConfirm(`Delete handout "${escapeHtml(record.title || "")}"?`, "Delete Handout", "Delete", true);
+                if (!confirmDelete) return;
+
+                try {
+                    const bankRef = doc(db, "question_banks", bankId);
+                    const handoutRef = doc(db, "question_banks", bankId, "handouts", handoutId);
+
+                    await deleteDoc(handoutRef);
+                    await updateDoc(bankRef, {
+                        handoutCount: increment(-1),
+                        updatedAt: serverTimestamp()
+                    });
+                    await removeHandoutCatalog(handoutId);
+
+                    if (record.storagePath) {
+                        try {
+                            await deleteObject(storageRef(storage, record.storagePath));
+                        } catch (_err) {
+                            // File may already be gone or inaccessible.
+                        }
+                    }
+
+                    await logActivity(user, "DELETE_HANDOUT", `Deleted handout: ${record.title || record.fileName || "(Unnamed)"}`, {
+                        entityType: "handout",
+                        entityId: handoutId,
+                        subject: record.subject || "",
+                        sessionName: record.sessionName || "",
+                        operation: "DELETE"
+                    });
+
+                    showToast("Handout deleted.", "success");
+                    await Promise.all([loadHandouts(), loadStats()]);
+                } catch (err) {
+                    showToast("Error deleting handout: " + err.message, "error");
+                }
+            }
+        });
+
+        async function deleteHandouts(scopeType) {
+            if (scopeType === "subject" && activeSubject === "all") {
                 showToast("Select a subject first.", "warning");
                 return;
             }
 
-            const button = document.getElementById(scope === "subject" ? "btn-delete-subject" : "btn-delete-all");
             try {
-                const bankDocs = await getQuestionBankDocsForDelete(scope);
-                if (!bankDocs.length) {
-                    showToast(scope === "subject" ? `No ${activeSubject} question bank found.` : "No question banks found.", "info");
+                const q = query(
+                    collectionGroup(db, "handouts")
+                );
+                const snap = await getDocs(q);
+                const handoutDocs = snap.docs
+                    .map(mapNestedHandoutDoc)
+                    .filter(Boolean)
+                    .filter((handout) => scopeType === "all" || handout.subject === activeSubject);
+
+                if (!handoutDocs.length) {
+                    showToast(scopeType === "subject" ? `No ${activeSubject} handouts found.` : "No handouts found.", "info");
                     return;
                 }
 
-                const estimatedQuestions = bankDocs.reduce((sum, d) => sum + (Number(d.data().questionCount) || 0), 0);
-                const label = scope === "subject" ? activeSubject : "all question banks";
-                const ok = await showConfirm(
-                    `Delete <strong>${label}</strong>? This will remove ${bankDocs.length} bank record${bankDocs.length === 1 ? "" : "s"}${estimatedQuestions ? ` and about ${estimatedQuestions} question${estimatedQuestions === 1 ? "" : "s"}` : ""}. This cannot be undone.`,
-                    scope === "subject" ? "Delete Subject Bank" : "Delete All Question Banks",
-                    "Delete",
-                    true
-                );
+                const count = handoutDocs.length;
+                const ok = await showConfirm(`Delete ${count} handout${count === 1 ? "" : "s"}? This cannot be undone.`,
+                    scopeType === "subject" ? "Delete Subject Handouts" : "Delete All Handouts", "Delete", true);
                 if (!ok) return;
 
-                setButtonLoading(button, true, "Deleting...");
-                let deletedQuestions = 0;
-                for (const bankDoc of bankDocs) {
-                    deletedQuestions += await deleteQuestionBankDoc(bankDoc);
-                }
+                const button = scopeType === "subject" ? document.getElementById("btn-handout-delete-subject") : document.getElementById("btn-handout-delete-all");
+                setButtonLoading(button, true, "Deleting…");
 
-                await logActivity(user, "DELETE_QUESTION_BANKS", `Deleted ${label}`, {
-                    scope,
-                    subject: scope === "subject" ? activeSubject : null,
-                    bankCount: bankDocs.length,
-                    questionCount: deletedQuestions
+                const handoutGroups = new Map();
+                handoutDocs.forEach((handout) => {
+                    if (!handoutGroups.has(handout._bankId)) handoutGroups.set(handout._bankId, []);
+                    handoutGroups.get(handout._bankId).push(handout);
                 });
 
-                showToast(`Deleted ${bankDocs.length} bank${bankDocs.length === 1 ? "" : "s"} and ${deletedQuestions} question${deletedQuestions === 1 ? "" : "s"}.`, "success");
-                await loadMasterQuestions();
-                await loadStats();
+                for (const [bankId, handoutsInBank] of handoutGroups.entries()) {
+                    for (const handout of handoutsInBank) {
+                        await deleteDoc(handout._ref);
+                        await removeHandoutCatalog(handout._id);
+                        if (handout.storagePath) {
+                            try {
+                                await deleteObject(storageRef(storage, handout.storagePath));
+                            } catch (_err) {
+                                // ignore
+                            }
+                        }
+                    }
+
+                    await updateDoc(doc(db, "question_banks", bankId), {
+                        handoutCount: increment(-handoutsInBank.length),
+                        updatedAt: serverTimestamp()
+                    });
+                }
+
+                await logActivity(user, "DELETE_HANDOUTS", `Deleted ${count} handout${count === 1 ? "" : "s"}`, {
+                    scope: scopeType,
+                    subject: scopeType === "subject" ? activeSubject : null,
+                    deletedHandouts: count,
+                    operation: "DELETE"
+                });
+
+                showToast(`Deleted ${count} handout${count === 1 ? "" : "s"}.`, "success");
+                await Promise.all([loadHandouts(), loadStats()]);
             } catch (err) {
-                showToast("Error deleting question bank: " + err.message, "error");
+                showToast("Error deleting handouts: " + err.message, "error");
             } finally {
-                setButtonLoading(button, false);
-                updateDeleteControls();
+                const subjectButton = document.getElementById("btn-handout-delete-subject");
+                const allButton = document.getElementById("btn-handout-delete-all");
+                setButtonLoading(subjectButton, false);
+                setButtonLoading(allButton, false);
             }
         }
 
-        // ─── Delete session ────────────────────────────────────────────
-        window.deleteSession = async (sessionId, name) => {
-            const ok = await showConfirm(`Delete all questions in session "<strong>${name}</strong>"? This cannot be undone.`, "Delete Session");
-            if (!ok) return;
-            try {
-                // Delete questions in subcollection
-                const qSnap = await getDocs(collection(db, "question_banks", sessionId, "questions"));
-                const batch = writeBatch(db);
-                qSnap.forEach(d => batch.delete(d.ref));
-                
-                // Delete session document
-                batch.delete(doc(db, "question_banks", sessionId));
-                
-                await batch.commit();
+        function initFilters() {
+            ELEMENTS.masterSearch.addEventListener("input", applyMasterFilters);
+            ELEMENTS.filterCategory.addEventListener("change", applyMasterFilters);
+            ELEMENTS.filterTopic.addEventListener("change", applyMasterFilters);
 
-                // Log activity
-                await logActivity(user, "DELETE_QUESTIONS", `Deleted question session: ${name}`, {
-                    sessionId,
-                    sessionName: name,
-                    count: qSnap.size
+            document.getElementById("btn-refresh-master").addEventListener("click", loadMasterQuestions);
+            document.getElementById("btn-delete-subject").addEventListener("click", () => deleteQuestionBanks("subject"));
+            document.getElementById("btn-delete-all").addEventListener("click", () => deleteQuestionBanks("all"));
+
+            ELEMENTS.handoutSearch.addEventListener("input", applyHandoutFilters);
+            document.getElementById("btn-refresh-handout").addEventListener("click", loadHandouts);
+            document.getElementById("btn-handout-delete-subject").addEventListener("click", () => deleteHandouts("subject"));
+            document.getElementById("btn-handout-delete-all").addEventListener("click", () => deleteHandouts("all"));
+
+            ELEMENTS.subjectChips.forEach((chip) => {
+                chip.addEventListener("click", () => {
+                    activeSubject = chip.dataset.subject;
+                    updateSubjectControls();
+
+                    if (activeMode === "questions") {
+                        applyMasterFilters();
+                    } else {
+                        applyHandoutFilters();
+                    }
                 });
-
-                showToast(`Session "${name}" deleted.`, "success");
-            } catch (err) {
-                showToast("Error deleting session: " + err.message, "error");
-            }
-        };
-
-        // Template download
-        document.getElementById("btn-download-template").addEventListener("click", () => {
-            const a = document.createElement("a");
-            a.href = "../question-bank-template.xlsx";
-            a.download = "question-bank-template.xlsx";
-            a.click();
-            logActivity(user, "DOWNLOAD_TEMPLATE", "Downloaded the question-bank import template", {
-                operation: "READ",
-                entityType: "questionBank"
             });
-            showToast("Template downloaded!", "info");
-        });
 
-        // ─── Export logic ──────────────────────────────────────────────
+            document.getElementById("btn-add-question").addEventListener("click", () => openQuestionForm());
+        }
+
+        // Export only current question view
         document.getElementById("btn-export").addEventListener("click", () => {
-            if (!masterQuestions.length) {
+            if (!masterFiltered.length) {
                 showToast("No questions available to export.", "error");
                 return;
             }
 
-            // Map current (filtered or all) questions to spreadsheet format
-            const exportData = masterFiltered.map(q => ({
+            const exportData = masterFiltered.map((q) => ({
                 "Question": q.questionText || "",
                 "Option A": q.optionA || "",
                 "Option B": q.optionB || "",
@@ -867,24 +2221,45 @@
                 "Option D": q.optionD || "",
                 "Answer": q.correctAnswer || "",
                 "Topic": q.topic || "",
-                "Category": q.category || ""
+                "Category": q.category || "",
+                "Subject": q.subject || ""
             }));
 
             const wb = XLSX.utils.book_new();
             const ws = XLSX.utils.json_to_sheet(exportData);
             XLSX.utils.book_append_sheet(wb, ws, "Questions");
-            
-            const fileName = `PBEC_Admin_MasterBank_${new Date().toISOString().split('T')[0]}.xlsx`;
+            const fileName = `PBEC_Admin_QuestionBank_${new Date().toISOString().split("T")[0]}.xlsx`;
             XLSX.writeFile(wb, fileName);
+
             logActivity(user, "EXPORT_QUESTIONS", `Exported ${exportData.length} questions`, {
                 operation: "READ",
                 entityType: "questionBank",
                 count: exportData.length,
                 fileName
             });
-            
-            showToast("Admin master bank exported!", "success");
+
+            showToast("Question bank exported!", "success");
         });
+
+        document.getElementById("btn-download-template").addEventListener("click", () => {
+            const anchor = document.createElement("a");
+            anchor.href = "../question-bank-template.xlsx";
+            anchor.download = "question-bank-template.xlsx";
+            anchor.click();
+
+            logActivity(user, "DOWNLOAD_TEMPLATE", "Downloaded the question-bank import template", {
+                operation: "READ",
+                entityType: "questionBank"
+            });
+
+            showToast("Template downloaded!", "info");
+        });
+
+        initFilters();
+        setMode("questions");
+        updateSubjectControls();
+        loadStats();
+        loadMasterQuestions();
     </script>
 </body>
 
