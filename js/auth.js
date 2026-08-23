@@ -8,7 +8,7 @@ import {
     onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { 
-    doc, getDoc, setDoc, updateDoc, 
+    doc, getDoc, updateDoc,
     serverTimestamp, collection, query, where, getDocs, limit 
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
@@ -204,25 +204,9 @@ async function fetchUserRole(user) {
             return { ...data, uid: user.uid };
         } 
         
-        // 3. Auto-signup for new validated Email users (Admins or similar)
-        if (!user.isAnonymous && user.email) {
-            console.log("No record found, creating default teacher role for email user");
-            const newData = {
-                email: user.email,
-                role: "teacher",
-                status: "active",
-                isActive: true,
-                createdAt: serverTimestamp()
-            };
-            await setDoc(doc(db, "users", user.uid), newData);
-            await logActivity({ ...newData, uid: user.uid }, "CREATE_USER_PROFILE", "Created a default portal user profile", {
-                entityType: "user",
-                entityId: user.uid
-            });
-            return { ...newData, uid: user.uid };
-        }
-        
-        console.warn("No role found for user");
+        // Firebase Auth alone does not grant a portal role. An administrator must create
+        // the matching Firestore profile first.
+        console.warn("No authorized Firestore profile found for user");
         return null;
     } catch (e) {
         console.error("Error fetching user role:", e);
@@ -384,6 +368,18 @@ export async function login(identifier, password) {
             throw { code: failedLoginAttempts >= MAX_FAILED_ATTEMPTS ? "auth/account-locked" : "auth/wrong-password" };
         }
 
+        if (!userData.email) {
+            throw { code: "auth/missing-email" };
+        }
+
+        // Replace the temporary anonymous lookup session with the teacher's stable Firebase
+        // identity. Question ownership is enforced by this UID in Firestore rules.
+        const credential = await signInWithEmailAndPassword(auth, userData.email, password);
+        if (credential.user.uid !== userDoc.id) {
+            await signOut(auth).catch(() => {});
+            throw { code: "auth/profile-mismatch" };
+        }
+
         await updateDoc(userDoc.ref, {
             failedLoginAttempts: 0,
             lockedUntil: null,
@@ -393,7 +389,7 @@ export async function login(identifier, password) {
         // Persist session before returning
         const sessionPayload = { 
             ...userData, 
-            uid: userDoc.id, 
+            uid: credential.user.uid,
             teacherId: userData.teacherId || userData.instructorId || tid,
             role: userData.role || "teacher", // Ensure role exists
             isIdSession: true 

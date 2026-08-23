@@ -176,7 +176,7 @@
         import { logActivity } from "../js/audit.js";
         import {
             collection, addDoc, getDocs, deleteDoc, doc,
-            serverTimestamp, query, orderBy, onSnapshot, updateDoc, where, collectionGroup
+            serverTimestamp, query, orderBy, onSnapshot, updateDoc, where
         } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
         const user = await requireAuth("teacher");
@@ -191,6 +191,38 @@
 
         let allExams = [];
         let activeSubject = "all";
+        const SUBJECT_BANKS = Object.freeze({
+            "Mathematics": "default_mathematics",
+            "ESAS": "default_esas",
+            "Professional EE": "default_professional_ee"
+        });
+
+        async function getVisibleQuestions(subject, requestedBankIds = []) {
+            const canonicalBankId = SUBJECT_BANKS[subject];
+            if (!canonicalBankId) return [];
+            const bankIds = requestedBankIds.includes(canonicalBankId) || requestedBankIds.length === 0
+                ? [canonicalBankId]
+                : [];
+            const perBank = await Promise.all(bankIds.map(async (bankId) => {
+                const questions = collection(db, "question_banks", bankId, "questions");
+                const [defaults, owned] = await Promise.all([
+                    getDocs(query(questions, where("isDefault", "==", true))),
+                    getDocs(query(questions, where("uploadedByUid", "==", user.uid)))
+                ]);
+                return [...defaults.docs, ...owned.docs].map((questionDoc) => ({
+                    _id: questionDoc.id,
+                    _bankId: bankId,
+                    ...questionDoc.data()
+                }));
+            }));
+            const seen = new Set();
+            return perBank.flat().filter((question) => {
+                const key = `${question.subject || subject}|${String(question.questionText || "").toLowerCase().replace(/\s+/g, " ").trim()}`;
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+        }
 
         function getTeacherOwnerKeys() {
             return [user.teacherId, user.email, user.uid].filter(Boolean).map(String);
@@ -334,32 +366,23 @@
             const container = document.getElementById("session-checkboxes");
             container.innerHTML = `<div class="flex-center" style="padding:16px;"><div class="spinner"></div></div>`;
 
-            // Optimized: Fetch session metadata instead of all questions
-            let q = query(collection(db, "question_banks"), where("subject", "==", subject));
-            const snap = await getDocs(q);
-            const sessions = {};
-            snap.forEach(d => {
-                const data = d.data();
-                if (user.role !== "admin" && !isOwnedByCurrentTeacher(data)) return;
-                sessions[d.id] = { name: data.sessionName || data.displayName || data.sourceFileName || "Unnamed Session", count: data.questionCount || 0 };
-            });
-
-            const keys = Object.keys(sessions);
-            if (!keys.length) {
+            const bankId = SUBJECT_BANKS[subject];
+            const questions = await getVisibleQuestions(subject, [bankId]);
+            if (!bankId || !questions.length) {
                 container.innerHTML = `<div class="empty-state" style="padding:20px 0;"><p>No question banks found for ${subject}.</p></div>`;
                 document.getElementById("gen-submit").disabled = true;
                 return;
             }
 
-            container.innerHTML = keys.map(k => `
+            container.innerHTML = `
       <label style="display:flex;align-items:center;gap:10px;padding:8px 4px;cursor:pointer;border-radius:var(--radius-sm);transition:background .15s;" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background=''">
-        <input type="checkbox" class="session-cb" value="${k}" style="width:16px;height:16px;accent-color:var(--accent);" />
+        <input type="checkbox" class="session-cb" value="${bankId}" style="width:16px;height:16px;accent-color:var(--accent);" />
         <div>
-          <div class="fw-600" style="font-size:13px;">${sessions[k].name}</div>
-          <div class="text-xs text-muted">${sessions[k].count} questions</div>
+          <div class="fw-600" style="font-size:13px;">${subject} Question Bank</div>
+          <div class="text-xs text-muted">${questions.length} accessible questions (defaults + yours)</div>
         </div>
       </label>
-    `).join("");
+    `;
 
             container.querySelectorAll(".session-cb").forEach(cb => {
                 cb.addEventListener("change", () => {
@@ -380,12 +403,7 @@
             setButtonLoading(btn, true, "Generating…");
 
             try {
-                // Optimized: Fetch questions ONLY from selected sessions
-                let pool = [];
-                for (const sid of sessionIds) {
-                    const qSnap = await getDocs(collection(db, "question_banks", sid, "questions"));
-                    pool.push(...qSnap.docs.map(d => ({ _id: d.id, ...d.data() })));
-                }
+                const pool = await getVisibleQuestions(subject, sessionIds);
 
                 if (!pool.length) throw new Error("No questions found in selected sessions.");
 
@@ -430,10 +448,14 @@
             container.innerHTML = `<div class="flex-center" style="grid-column:1/-1;padding:40px;"><div class="spinner"></div></div>`;
             document.getElementById("modal-view").classList.remove("hidden");
 
-            // Fetch questions from Firestore by ID (collectionGroup to get all)
-            const allQSnap = await getDocs(collectionGroup(db, "questions"));
+            const subject = getExamSubject(exam);
+            const bankIds = exam.selectedQuestionBankIds || exam.sessionIds || [SUBJECT_BANKS[subject]];
+            const visibleQuestions = await getVisibleQuestions(subject, bankIds);
             const qMap = {};
-            allQSnap.forEach(d => { qMap[d.id] = d.data(); });
+            visibleQuestions.forEach(question => {
+                qMap[question._id] = question;
+                if (question.id != null) qMap[String(question.id)] = question;
+            });
 
             const renderSet = (ids, label) => {
                 const rows = ids.slice(0, 20).map((qid, i) => {

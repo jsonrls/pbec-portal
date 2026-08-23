@@ -23,6 +23,7 @@
                 <div class="topbar-actions">
                     <button class="btn btn-secondary" id="btn-download-template">⬇ Template</button>
                     <button class="btn btn-secondary" id="btn-export">📤 Export Excel</button>
+                    <button class="btn btn-secondary" id="btn-add-question">＋ Add Question</button>
                     <button class="btn btn-primary" id="btn-upload">📁 Upload CSV/Excel</button>
                     <input type="file" id="file-input" accept=".csv,.xlsx,.xls" class="hidden" />
                 </div>
@@ -98,8 +99,8 @@
                                     <path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5" />
                                 </svg>
                             </button>
-                            <button class="btn btn-danger btn-sm" id="btn-delete-subject" disabled>Delete Subject Bank</button>
-                            <button class="btn btn-danger btn-sm" id="btn-delete-all">Delete All</button>
+                            <button class="btn btn-danger btn-sm" id="btn-delete-subject" disabled>Delete My Subject Questions</button>
+                            <button class="btn btn-danger btn-sm" id="btn-delete-all">Delete All My Questions</button>
                         </div>
                     </div>
 
@@ -108,15 +109,18 @@
                             <table>
                                 <thead style="position: sticky; top: 0; background: var(--bg-surface); z-index: 10;">
                                     <tr>
+                                        <th style="width:90px;">ID</th>
                                         <th>Question</th>
                                         <th>Subject</th>
                                         <th>Topic</th>
                                         <th>Category</th>
                                         <th>Ans</th>
+                                        <th>Source</th>
+                                        <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody id="master-table-body">
-                                    <tr><td colspan="5" class="text-center py-24"><span class="spinner"></span></td></tr>
+                                    <tr><td colspan="8" class="text-center py-24"><span class="spinner"></span></td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -170,17 +174,79 @@
         </div>
     </div>
 
+    <!-- Add/edit one teacher-owned question -->
+    <div class="modal-overlay hidden" id="modal-question">
+        <div class="modal" style="max-width:620px;">
+            <div class="modal-header">
+                <span style="font-size:20px;">✏️</span>
+                <h3 id="question-modal-title">Add Question</h3>
+                <button class="modal-close" id="question-close">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Subject *</label>
+                    <select class="form-control" id="question-subject">
+                        <option value="Mathematics">Mathematics</option>
+                        <option value="ESAS">ESAS</option>
+                        <option value="Professional EE">Professional EE</option>
+                    </select>
+                </div>
+                <div class="form-group"><label>Question *</label><textarea class="form-control" id="question-text" rows="3"></textarea></div>
+                <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:12px;">
+                    <div class="form-group"><label>Option A *</label><input class="form-control" id="question-option-a"></div>
+                    <div class="form-group"><label>Option B *</label><input class="form-control" id="question-option-b"></div>
+                    <div class="form-group"><label>Option C *</label><input class="form-control" id="question-option-c"></div>
+                    <div class="form-group"><label>Option D *</label><input class="form-control" id="question-option-d"></div>
+                    <div class="form-group"><label>Correct Answer *</label><select class="form-control" id="question-answer"><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
+                    <div class="form-group"><label>Category</label><select class="form-control" id="question-category"><option value="Objective">Objective</option><option value="Computation">Computation</option></select></div>
+                </div>
+                <div class="form-group"><label>Topic</label><input class="form-control" id="question-topic" placeholder="General"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="question-cancel">Cancel</button>
+                <button class="btn btn-primary" id="question-save">Save Question</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay hidden" id="modal-template-picker">
+        <div class="modal" style="max-width:520px;" role="dialog" aria-modal="true" aria-labelledby="template-picker-title">
+            <div class="modal-header">
+                <span style="font-size:20px;">📥</span>
+                <h3 id="template-picker-title">Download Question Bank Template</h3>
+                <button type="button" class="modal-close" id="template-picker-close" aria-label="Close template selection">✕</button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted">Which question bank template do you want to download?</p>
+                <div style="display:grid;gap:10px;margin-top:16px;">
+                    <button type="button" class="btn btn-secondary" data-template-subject="Mathematics" style="justify-content:flex-start;">
+                        <span aria-hidden="true">📐</span> Mathematics
+                    </button>
+                    <button type="button" class="btn btn-secondary" data-template-subject="ESAS" style="justify-content:flex-start;">
+                        <span aria-hidden="true">🔬</span> Engineering Science and Allied Subjects (ESAS)
+                    </button>
+                    <button type="button" class="btn btn-secondary" data-template-subject="Professional EE" style="justify-content:flex-start;">
+                        <span aria-hidden="true">⚡</span> Professional Electrical Engineering
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="template-picker-cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <div id="toast-container"></div>
 
     <script type="module">
         import { requireAuth, logout } from "../js/auth.js";
         import { renderSidebar } from "../js/sidebar.js";
-        import { initSidebar, showToast, showConfirm, setButtonLoading, formatDateTime } from "../js/ui.js";
+        import { initSidebar, showToast, showConfirm, setButtonLoading } from "../js/ui.js";
         import { logActivity } from "../js/audit.js";
         import { db } from "../js/firebase-config.js";
         import {
-            collection, addDoc, getDocs, deleteDoc, doc,
-            serverTimestamp, query, orderBy, onSnapshot, writeBatch, where, getCountFromServer, collectionGroup
+            collection, getDocs, deleteDoc, doc,
+            serverTimestamp, query, writeBatch, runTransaction, where, getCountFromServer
         } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
         const user = await requireAuth("teacher");
@@ -193,19 +259,153 @@
         let activeSubject = "all";
         let selectedFile = null;
 
-        function getTeacherOwnerKeys() {
-            return [user.teacherId, user.email, user.uid].filter(Boolean).map(String);
+        const SUBJECT_BANKS = Object.freeze({
+            "Mathematics": "default_mathematics",
+            "ESAS": "default_esas",
+            "Professional EE": "default_professional_ee"
+        });
+        const QUESTION_BANK_TEMPLATES = Object.freeze({
+            "Mathematics": {
+                fileName: "Mathematics.xlsx",
+                downloadName: "Mathematics Question Bank Template.xlsx",
+                url: "../assets/question-banks/Mathematics.xlsx"
+            },
+            "ESAS": {
+                fileName: "Engineering Science and Allied Subjects.xlsx",
+                downloadName: "ESAS Question Bank Template.xlsx",
+                url: "../assets/question-banks/Engineering%20Science%20and%20Allied%20Subjects.xlsx"
+            },
+            "Professional EE": {
+                fileName: "Professional Subjects.xlsx",
+                downloadName: "Professional EE Question Bank Template.xlsx",
+                url: "../assets/question-banks/Professional%20Subjects.xlsx"
+            }
+        });
+
+        const canonicalQuestionBankId = (subject) => SUBJECT_BANKS[subject];
+        const isOwnedByCurrentTeacher = (record = {}) =>
+            Boolean(user.uid) && record.isDefault !== true && record.uploadedByUid === user.uid;
+        const canModifyQuestion = (record = {}) => isOwnedByCurrentTeacher(record);
+        const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
+            "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+        })[char]);
+
+        function getBankQuestionNumber(record = {}) {
+            const value = Number(record.bankQuestionId ?? record.questionNumber);
+            return Number.isSafeInteger(value) && value > 0 ? value : 0;
         }
 
-        function isOwnedByCurrentTeacher(record = {}) {
-            const ownerKeys = getTeacherOwnerKeys();
-            return [
-                record.uploadedByTeacherId,
-                record.uploadedByUid,
-                record.uploaderEmail,
-                record.createdByEmail,
-                record.createdBy
-            ].some(value => value && ownerKeys.includes(String(value)));
+        function getQuestionOrigin(record = {}) {
+            if (record.questionOrigin === "default" || record.isDefault === true) return "default";
+            if (record.questionOrigin === "admin") return "admin";
+            return "user";
+        }
+
+        const MAX_BANK_QUESTION_NUMBER = 2_147_483_647;
+        const MAX_SEQUENCE_TRANSACTION_SIZE = 400;
+        const bankSequenceSeedCache = new Map();
+
+        function newQuestionId(reservedIds = new Set()) {
+            let id = 0;
+            do {
+                const words = crypto.getRandomValues(new Uint32Array(2));
+                id = (words[0] & 0x1fffff) * 0x100000000 + words[1];
+            } while (!id || reservedIds.has(id));
+            return id;
+        }
+
+        async function getCurrentBankSequenceMax(subject) {
+            const bankId = canonicalQuestionBankId(subject);
+            if (bankSequenceSeedCache.has(bankId)) return bankSequenceSeedCache.get(bankId);
+
+            const questions = await getVisibleQuestionDocs(subject);
+            const maximum = questions.reduce(
+                (current, question) => Math.max(current, getBankQuestionNumber(question)),
+                0
+            );
+            bankSequenceSeedCache.set(bankId, maximum);
+            return maximum;
+        }
+
+        async function createQuestionsWithBankSequence({ bankId, subject, payloads }) {
+            if (!payloads.length) return [];
+            if (payloads.length > MAX_SEQUENCE_TRANSACTION_SIZE) {
+                throw new Error(`A question sequence transaction cannot exceed ${MAX_SEQUENCE_TRANSACTION_SIZE} questions.`);
+            }
+
+            const seedMaximum = await getCurrentBankSequenceMax(subject);
+            const bankRef = doc(db, "question_banks", bankId);
+            const reservedIds = new Set();
+            const prepared = payloads.map((payload) => {
+                const requestedId = Number(payload.id);
+                const id = Number.isSafeInteger(requestedId) && requestedId > 0
+                    ? requestedId
+                    : newQuestionId(reservedIds);
+                if (reservedIds.has(id)) throw new Error(`Duplicate question ID ${id} in this upload.`);
+                reservedIds.add(id);
+                return { payload, id };
+            });
+
+            const created = await runTransaction(db, async (transaction) => {
+                const bankSnapshot = await transaction.get(bankRef);
+                if (!bankSnapshot.exists()) throw new Error(`Question bank not found for ${subject}.`);
+
+                const storedMaximum = Number(bankSnapshot.data().lastQuestionNumber);
+                const currentMaximum = Math.max(
+                    Number.isSafeInteger(storedMaximum) && storedMaximum > 0 ? storedMaximum : 0,
+                    seedMaximum
+                );
+                const nextMaximum = currentMaximum + prepared.length;
+                if (nextMaximum > MAX_BANK_QUESTION_NUMBER) {
+                    throw new Error(`${subject} has reached the supported question-number limit.`);
+                }
+
+                transaction.update(bankRef, {
+                    lastQuestionNumber: nextMaximum,
+                    sequenceUpdatedAt: serverTimestamp(),
+                    sequenceUpdatedByUid: user.uid,
+                    sequenceUpdatedByRole: "user"
+                });
+
+                return prepared.map(({ payload, id }, index) => {
+                    const bankQuestionId = currentMaximum + index + 1;
+                    const questionRef = doc(db, "question_banks", bankId, "questions", String(id));
+                    const question = {
+                        ...payload,
+                        id,
+                        questionNumber: bankQuestionId,
+                        bankQuestionId,
+                        questionOrigin: "user"
+                    };
+                    transaction.set(questionRef, question);
+                    return question;
+                });
+            });
+
+            bankSequenceSeedCache.set(bankId, Math.max(
+                bankSequenceSeedCache.get(bankId) || 0,
+                ...created.map((question) => question.bankQuestionId)
+            ));
+            return created;
+        }
+
+        async function getVisibleQuestionDocs(subject) {
+            const bankId = canonicalQuestionBankId(subject);
+            if (!bankId) return [];
+            const questions = collection(db, "question_banks", bankId, "questions");
+            const [defaults, owned] = await Promise.all([
+                getDocs(query(questions, where("isDefault", "==", true))),
+                getDocs(query(questions, where("uploadedByUid", "==", user.uid)))
+            ]);
+            return [...defaults.docs, ...owned.docs]
+                .filter((questionDoc, index, all) => all.findIndex((item) => item.id === questionDoc.id) === index)
+                .map((questionDoc) => ({
+                    _id: questionDoc.id,
+                    _bankId: bankId,
+                    _key: `${bankId}/${questionDoc.id}`,
+                    _ref: questionDoc.ref,
+                    ...questionDoc.data()
+                }));
         }
 
         // ─── Load stats ────────────────────────────────────────────────
@@ -215,14 +415,13 @@
             let total = 0;
 
             await Promise.all(subjects.map(async (s, i) => {
-                const q = query(collection(db, "question_banks"), where("subject", "==", s));
-                const snap = await getDocs(q);
-                let count = 0;
-                snap.forEach(d => {
-                    const data = d.data();
-                    if (user.role !== "admin" && !isOwnedByCurrentTeacher(data)) return;
-                    count += data.questionCount || 0;
-                });
+                const bankId = canonicalQuestionBankId(s);
+                const questions = collection(db, "question_banks", bankId, "questions");
+                const [defaultCount, ownCount] = await Promise.all([
+                    getCountFromServer(query(questions, where("isDefault", "==", true))),
+                    getCountFromServer(query(questions, where("uploadedByUid", "==", user.uid)))
+                ]);
+                const count = defaultCount.data().count + ownCount.data().count;
                 document.getElementById(ids[i]).textContent = count;
                 total += count;
             }));
@@ -235,17 +434,10 @@
 
         async function loadMasterQuestions() {
             const tbody = document.getElementById("master-table-body");
-            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-24"><span class="spinner"></span></td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" class="text-center py-24"><span class="spinner"></span></td></tr>`;
             
             try {
-                const q = collectionGroup(db, "questions");
-                const snap = await getDocs(q);
-                let rawQuestions = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
-
-                // Client-side filtering to avoid Index requirement
-                if (user.role !== "admin") {
-                    rawQuestions = rawQuestions.filter(q => isOwnedByCurrentTeacher(q));
-                }
+                const rawQuestions = (await Promise.all(Object.keys(SUBJECT_BANKS).map(getVisibleQuestionDocs))).flat();
                 
                 // client-side deduplication for the Master List view
                 const seen = new Set();
@@ -255,17 +447,24 @@
                     if (seen.has(hash)) return false;
                     seen.add(hash);
                     return true;
+                }).sort((left, right) => {
+                    const subjectOrder = Object.keys(SUBJECT_BANKS).indexOf(left.subject)
+                        - Object.keys(SUBJECT_BANKS).indexOf(right.subject);
+                    if (subjectOrder) return subjectOrder;
+                    const leftNumber = getBankQuestionNumber(left) || Number.MAX_SAFE_INTEGER;
+                    const rightNumber = getBankQuestionNumber(right) || Number.MAX_SAFE_INTEGER;
+                    return leftNumber - rightNumber;
                 });
                 
                 // Populate topics dropdown
                 const topics = [...new Set(masterQuestions.map(q => q.topic).filter(Boolean))].sort();
                 const topicFilter = document.getElementById("filter-topic");
                 topicFilter.innerHTML = `<option value="all">All Topics</option>` + 
-                    topics.map(t => `<option value="${t}">${t}</option>`).join("");
+                    topics.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("");
                 
                 applyMasterFilters();
             } catch (err) {
-                tbody.innerHTML = `<tr><td colspan="5" class="text-center py-24 text-danger">Failed to load: ${err.message}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" class="text-center py-24 text-danger">Failed to load: ${escapeHtml(err.message)}</td></tr>`;
             }
         }
 
@@ -288,19 +487,29 @@
         function renderMasterTable() {
             const tbody = document.getElementById("master-table-body");
             if (!masterFiltered.length) {
-                tbody.innerHTML = `<tr><td colspan="5" class="text-center py-24 text-muted">No questions found.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" class="text-center py-24 text-muted">No questions found.</td></tr>`;
                 return;
             }
 
-            tbody.innerHTML = masterFiltered.map(q => `
-                <tr>
-                    <td class="text-sm" style="max-width:340px; white-space:normal;">${q.questionText || "—"}</td>
-                    <td><span class="badge badge-teal">${q.subject || "—"}</span></td>
-                    <td class="text-xs text-muted">${q.topic || "—"}</td>
-                    <td><span class="badge ${q.category === "Computation" ? "badge-blue" : "badge-yellow"}">${q.category || "—"}</span></td>
-                    <td class="fw-600 text-accent">${q.correctAnswer || "—"}</td>
-                </tr>
-            `).join("");
+            tbody.innerHTML = masterFiltered.map(q => {
+                const origin = getQuestionOrigin(q);
+                const originLabel = origin === "default"
+                    ? "Default · read-only"
+                    : (origin === "admin" ? "Added by admin · read-only" : "Added by user");
+                const originClass = origin === "default" ? "badge-gray" : (origin === "admin" ? "badge-blue" : "badge-teal");
+                return `
+                    <tr>
+                        <td class="fw-600 text-accent">${getBankQuestionNumber(q) || "—"}</td>
+                        <td class="text-sm" style="max-width:340px; white-space:normal;">${escapeHtml(q.questionText || "—")}</td>
+                        <td><span class="badge badge-teal">${escapeHtml(q.subject || "—")}</span></td>
+                        <td class="text-xs text-muted">${escapeHtml(q.topic || "—")}</td>
+                        <td><span class="badge ${q.category === "Computation" ? "badge-blue" : "badge-yellow"}">${escapeHtml(q.category || "—")}</span></td>
+                        <td class="fw-600 text-accent">${escapeHtml(q.correctAnswer || "—")}</td>
+                        <td><span class="badge ${originClass}">${originLabel}</span></td>
+                        <td>${canModifyQuestion(q) ? `<div class="td-actions"><button class="btn btn-secondary btn-sm" data-edit-question="${escapeHtml(q._key)}">Edit</button><button class="btn btn-danger btn-sm" data-delete-question="${escapeHtml(q._key)}">Delete</button></div>` : "—"}</td>
+                    </tr>
+                `;
+            }).join("");
         }
 
         document.getElementById("master-search").addEventListener("input", applyMasterFilters);
@@ -309,6 +518,13 @@
         document.getElementById("btn-refresh-master").addEventListener("click", loadMasterQuestions);
         document.getElementById("btn-delete-subject").addEventListener("click", () => deleteQuestionBanks("subject"));
         document.getElementById("btn-delete-all").addEventListener("click", () => deleteQuestionBanks("all"));
+
+        document.getElementById("master-table-body").addEventListener("click", (event) => {
+            const editButton = event.target.closest("[data-edit-question]");
+            const deleteButton = event.target.closest("[data-delete-question]");
+            if (editButton) openQuestionModal(masterQuestions.find((item) => item._key === editButton.dataset.editQuestion));
+            if (deleteButton) deleteOneQuestion(masterQuestions.find((item) => item._key === deleteButton.dataset.deleteQuestion));
+        });
 
         // Subject filter chips
         document.querySelectorAll(".chip[data-subject]").forEach(chip => {
@@ -330,9 +546,123 @@
         loadMasterQuestions();
         loadStats();
 
-        // Real-time listener for stats only now
-        const qStats = query(collection(db, "question_banks"));
-        onSnapshot(qStats, () => loadStats());
+        let editingQuestion = null;
+
+        function closeQuestionModal() {
+            document.getElementById("modal-question").classList.add("hidden");
+            editingQuestion = null;
+        }
+
+        function openQuestionModal(question = null) {
+            if (question && !canModifyQuestion(question)) {
+                showToast("Default questions are read-only.", "warning");
+                return;
+            }
+            editingQuestion = question || null;
+            document.getElementById("question-modal-title").textContent = question ? "Edit My Question" : "Add Question";
+            const selectedSubject = question?.subject || (activeSubject === "all" ? "Mathematics" : activeSubject);
+            const subjectEl = document.getElementById("question-subject");
+            subjectEl.value = selectedSubject;
+            subjectEl.disabled = Boolean(question);
+            document.getElementById("question-text").value = question?.questionText || "";
+            document.getElementById("question-option-a").value = question?.optionA || "";
+            document.getElementById("question-option-b").value = question?.optionB || "";
+            document.getElementById("question-option-c").value = question?.optionC || "";
+            document.getElementById("question-option-d").value = question?.optionD || "";
+            document.getElementById("question-answer").value = question?.correctAnswer || "A";
+            document.getElementById("question-category").value = question?.category || "Objective";
+            document.getElementById("question-topic").value = question?.topic || "";
+            document.getElementById("modal-question").classList.remove("hidden");
+        }
+
+        document.getElementById("btn-add-question").addEventListener("click", () => openQuestionModal());
+        document.getElementById("question-close").addEventListener("click", closeQuestionModal);
+        document.getElementById("question-cancel").addEventListener("click", closeQuestionModal);
+        document.getElementById("question-save").addEventListener("click", async () => {
+            const button = document.getElementById("question-save");
+            const subject = document.getElementById("question-subject").value;
+            const payload = {
+                subject,
+                questionText: document.getElementById("question-text").value.trim(),
+                optionA: document.getElementById("question-option-a").value.trim(),
+                optionB: document.getElementById("question-option-b").value.trim(),
+                optionC: document.getElementById("question-option-c").value.trim(),
+                optionD: document.getElementById("question-option-d").value.trim(),
+                correctAnswer: document.getElementById("question-answer").value,
+                category: document.getElementById("question-category").value,
+                topic: document.getElementById("question-topic").value.trim() || "General"
+            };
+            if (!payload.questionText || !payload.optionA || !payload.optionB || !payload.optionC || !payload.optionD) {
+                showToast("Question text and all four options are required.", "warning");
+                return;
+            }
+
+            const duplicate = masterQuestions.find((item) => item.subject === subject
+                && normalizeQuestionSignature(item.questionText) === normalizeQuestionSignature(payload.questionText)
+                && item._key !== editingQuestion?._key);
+            if (duplicate) {
+                showToast("That question already exists in this subject bank.", "warning");
+                return;
+            }
+
+            setButtonLoading(button, true, "Saving…");
+            try {
+                if (editingQuestion) {
+                    if (!canModifyQuestion(editingQuestion)) throw new Error("You can only edit questions you added.");
+                    const batch = writeBatch(db);
+                    batch.update(editingQuestion._ref, { ...payload, updatedAt: serverTimestamp() });
+                    await batch.commit();
+                } else {
+                    const bankId = canonicalQuestionBankId(subject);
+                    await createQuestionsWithBankSequence({
+                        bankId,
+                        subject,
+                        payloads: [{
+                            ...payload,
+                            questionBankId: bankId,
+                            importSessionId: Date.now(),
+                            sessionName: "Manual Questions",
+                            customSessionName: "Manual Questions",
+                            sourceFileName: "Manual Entry",
+                            fileName: "Manual Entry",
+                            itemType: "question",
+                            isDefault: false,
+                            uploadedByUid: user.uid,
+                            uploadedByTeacherId: user.teacherId || "",
+                            uploaderEmail: user.email || "",
+                            createdAt: serverTimestamp(),
+                            updatedAt: serverTimestamp()
+                        }]
+                    });
+                }
+                const wasEditing = Boolean(editingQuestion);
+                await logActivity(user, wasEditing ? "UPDATE_QUESTION" : "ADD_QUESTION", `${wasEditing ? "Updated" : "Added"} a ${subject} question`, { subject });
+                closeQuestionModal();
+                await Promise.all([loadMasterQuestions(), loadStats()]);
+                showToast(wasEditing ? "Question updated." : "Question added.", "success");
+            } catch (error) {
+                showToast("Could not save question: " + error.message, "error");
+            } finally {
+                setButtonLoading(button, false);
+            }
+        });
+
+        async function deleteOneQuestion(question) {
+            if (!question || !canModifyQuestion(question)) {
+                showToast("You can only delete questions you added.", "warning");
+                return;
+            }
+            const ok = await showConfirm("Delete this question? The default bank will not be changed.", "Delete My Question", "Delete", true);
+            if (!ok) return;
+            try {
+                await deleteDoc(question._ref);
+                await logActivity(user, "DELETE_QUESTION", `Deleted a ${question.subject} question`, { subject: question.subject });
+                await Promise.all([loadMasterQuestions(), loadStats()]);
+                showToast("Question deleted.", "success");
+            } catch (error) {
+                showToast("Could not delete question: " + error.message, "error");
+            }
+        }
 
         // ─── Upload flow ───────────────────────────────────────────────
         const openUploadModal = () => {
@@ -561,19 +891,6 @@
                         const teacherId = user.teacherId || "";
                         const sourceFileName = selectedFile.name;
                         const uploadSessionName = sessionName || selectedFile.name;
-                        const existingSnap = await getDocs(collectionGroup(db, "questions"));
-                        const existingMap = new Map();
-                        existingSnap.forEach(d => {
-                            const questionData = d.data();
-                            const sameUploader =
-                                (questionData.uploadedByTeacherId || "") === teacherId ||
-                                (questionData.uploadedByUid || "") === (user.uid || "");
-                            if (!sameUploader) return;
-
-                            const key = `${normalizeQuestionSignature(questionData.questionText)}|${questionData.subject}`;
-                            if (!existingMap.has(key)) existingMap.set(key, []);
-                            existingMap.get(key).push({ id: d.id, bankId: d.ref.parent.parent.id, data: questionData });
-                        });
 
                         const questionsBySubject = parsed.reduce((groups, question) => {
                             if (!groups.has(question.subject)) groups.set(question.subject, []);
@@ -589,35 +906,24 @@
 
                         for (const [subjectName, subjectQuestions] of questionsBySubject.entries()) {
                             statusEl.textContent = `Processing ${subjectName} bank…`;
-                            const qBank = query(
-                                collection(db, "question_banks"),
-                                where("subject", "==", subjectName),
-                                where("uploadedByTeacherId", "==", teacherId)
-                            );
-                            const bankSnap = await getDocs(qBank);
-                            const existingBankDoc = bankSnap.docs.find((bankDoc) => {
-                                const bankData = bankDoc.data();
-                                const bankSourceFileName = (bankData.sourceFileName || "").trim().toLowerCase();
-                                const bankSessionName = (bankData.sessionName || "").trim().toLowerCase();
-                                const normalizedSourceFileName = sourceFileName.trim().toLowerCase();
-                                return bankSourceFileName === normalizedSourceFileName ||
-                                    (!bankSourceFileName && bankSessionName === uploadSessionName.trim().toLowerCase());
+                            const bankId = canonicalQuestionBankId(subjectName);
+                            if (!bankId) throw new Error(`Unsupported subject: ${subjectName}`);
+                            const bankQuestions = collection(db, "question_banks", bankId, "questions");
+                            const [defaultSnap, ownSnap] = await Promise.all([
+                                getDocs(query(bankQuestions, where("isDefault", "==", true))),
+                                getDocs(query(bankQuestions, where("uploadedByUid", "==", user.uid)))
+                            ]);
+                            const defaultMap = new Map();
+                            const ownMap = new Map();
+                            defaultSnap.forEach((questionDoc) => {
+                                const key = normalizeQuestionSignature(questionDoc.data().questionText);
+                                if (key) defaultMap.set(key, questionDoc);
                             });
-
-                            const bankSessionRef = existingBankDoc
-                                ? existingBankDoc.ref
-                                : doc(collection(db, "question_banks"));
-                            const bankQuestionMap = new Map();
-
-                            if (existingBankDoc) {
-                                const bankQuestionsSnap = await getDocs(collection(db, "question_banks", bankSessionRef.id, "questions"));
-                                bankQuestionsSnap.forEach((questionDoc) => {
-                                    const questionData = questionDoc.data();
-                                    const key = `${normalizeQuestionSignature(questionData.questionText)}|${subjectName}`;
-                                    if (!bankQuestionMap.has(key)) bankQuestionMap.set(key, []);
-                                    bankQuestionMap.get(key).push({ id: questionDoc.id });
-                                });
-                            }
+                            ownSnap.forEach((questionDoc) => {
+                                const key = normalizeQuestionSignature(questionDoc.data().questionText);
+                                if (!ownMap.has(key)) ownMap.set(key, []);
+                                ownMap.get(key).push(questionDoc);
+                            });
 
                             const seenInFile = new Set();
                             const toUpdate = [];
@@ -625,7 +931,7 @@
                             let duplicateCount = 0;
 
                             subjectQuestions.forEach((question) => {
-                                const key = `${normalizeQuestionSignature(question.questionText)}|${subjectName}`;
+                                const key = normalizeQuestionSignature(question.questionText);
                                 if (seenInFile.has(key)) {
                                     duplicateCount++;
                                     return;
@@ -633,9 +939,9 @@
 
                                 seenInFile.add(key);
 
-                                if (bankQuestionMap.has(key)) {
-                                    toUpdate.push({ existingDocs: bankQuestionMap.get(key), newData: question });
-                                } else if (existingMap.has(key)) {
+                                if (ownMap.has(key)) {
+                                    toUpdate.push({ existingDocs: ownMap.get(key), newData: question });
+                                } else if (defaultMap.has(key)) {
                                     duplicateCount++;
                                 } else {
                                     toCreate.push(question);
@@ -650,33 +956,17 @@
                             }
 
                             importedBankCount++;
-                            const currentCount = existingBankDoc?.data().questionCount || 0;
-                            const metadataBatch = writeBatch(db);
-                            metadataBatch.set(bankSessionRef, {
-                                subject: subjectName,
-                                sessionName: uploadSessionName,
-                                sourceFileName,
-                                importedAt: serverTimestamp(),
-                                uploaderEmail: user.email,
-                                uploadedByTeacherId: teacherId,
-                                uploadedByUid: user.uid || "",
-                                questionCount: currentCount + toCreate.length
-                            }, { merge: true });
-                            await metadataBatch.commit();
-
                             if (toUpdate.length > 0) {
                                 statusEl.textContent = `Updating ${toUpdate.length} ${subjectName} questions…`;
                                 for (let i = 0; i < toUpdate.length; i += 500) {
                                     const batch = writeBatch(db);
                                     const chunk = toUpdate.slice(i, i + 500);
                                     chunk.forEach((item) => {
-                                        item.existingDocs.forEach((docInfo) => {
-                                            const qRef = doc(db, "question_banks", bankSessionRef.id, "questions", docInfo.id);
-                                            batch.update(qRef, {
-                                                ...item.newData,
-                                                subject: subjectName,
+                                        const { questionNumber: _sourceQuestionNumber, ...mutableQuestionData } = item.newData;
+                                        item.existingDocs.forEach((questionDoc) => {
+                                            batch.update(questionDoc.ref, {
+                                                ...mutableQuestionData,
                                                 sessionName: uploadSessionName,
-                                                importSessionId: bankSessionRef.id,
                                                 sourceFileName,
                                                 updatedAt: serverTimestamp(),
                                                 lastUpdatedBy: user.email
@@ -689,24 +979,30 @@
 
                             if (toCreate.length > 0) {
                                 statusEl.textContent = `Adding ${toCreate.length} new ${subjectName} questions…`;
-                                for (let i = 0; i < toCreate.length; i += 500) {
-                                    const batch = writeBatch(db);
-                                    const chunk = toCreate.slice(i, i + 500);
-                                    chunk.forEach((question) => {
-                                        const qRef = doc(collection(db, "question_banks", bankSessionRef.id, "questions"));
-                                        batch.set(qRef, {
+                                for (let i = 0; i < toCreate.length; i += MAX_SEQUENCE_TRANSACTION_SIZE) {
+                                    const chunk = toCreate.slice(i, i + MAX_SEQUENCE_TRANSACTION_SIZE);
+                                    const payloads = chunk.map((question) => ({
                                             ...question,
+                                            sourceQuestionNumber: question.questionNumber,
                                             subject: subjectName,
                                             sessionName: uploadSessionName,
-                                            importSessionId: bankSessionRef.id,
+                                            customSessionName: uploadSessionName,
+                                            importSessionId: Date.now(),
+                                            questionBankId: bankId,
                                             sourceFileName,
+                                            fileName: sourceFileName,
+                                            itemType: "question",
+                                            isDefault: false,
                                             importedAt: serverTimestamp(),
                                             uploaderEmail: user.email,
                                             uploadedByTeacherId: teacherId,
-                                            uploadedByUid: user.uid || ""
-                                        });
+                                            uploadedByUid: user.uid
+                                        }));
+                                    await createQuestionsWithBankSequence({
+                                        bankId,
+                                        subject: subjectName,
+                                        payloads
                                     });
-                                    await batch.commit();
                                 }
                             }
 
@@ -742,7 +1038,7 @@
                         showToast(`Processed ${importedBankCount} subject banks: ${totalUpdated} updated, ${totalCreated} added.${duplicateSuffix}`, "success");
                         setTimeout(() => {
                             document.getElementById("modal-upload").classList.add("hidden");
-                            loadMasterQuestions(); // Refresh list
+                            Promise.all([loadMasterQuestions(), loadStats()]);
                         }, 2000);
 
                     } catch (err) {
@@ -761,34 +1057,20 @@
         });
 
         // ─── Delete question banks ─────────────────────────────────────
-        async function getQuestionBankDocsForDelete(scope) {
-            const banksRef = collection(db, "question_banks");
-            const bankQuery = scope === "subject"
-                ? query(banksRef, where("subject", "==", activeSubject))
-                : query(banksRef);
-            const snap = await getDocs(bankQuery);
-            const teacherId = user.teacherId || user.email;
-            return snap.docs.filter(d => {
-                const data = d.data();
-                return data.uploadedByTeacherId === teacherId || isOwnedByCurrentTeacher(data);
-            });
+        async function getOwnedQuestionDocs(subjects) {
+            const snapshots = await Promise.all(subjects.map((subjectName) => {
+                const questions = collection(db, "question_banks", canonicalQuestionBankId(subjectName), "questions");
+                return getDocs(query(questions, where("uploadedByUid", "==", user.uid)));
+            }));
+            return snapshots.flatMap((snapshot) => snapshot.docs);
         }
 
-        async function deleteQuestionBankDoc(bankDoc) {
-            const questionsSnap = await getDocs(collection(db, "question_banks", bankDoc.id, "questions"));
-            const questionDocs = questionsSnap.docs;
-
+        async function deleteQuestionDocs(questionDocs) {
             for (let i = 0; i < questionDocs.length; i += 450) {
                 const batch = writeBatch(db);
-                questionDocs.slice(i, i + 450).forEach(d => batch.delete(d.ref));
+                questionDocs.slice(i, i + 450).forEach((questionDoc) => batch.delete(questionDoc.ref));
                 await batch.commit();
             }
-
-            const batch = writeBatch(db);
-            batch.delete(bankDoc.ref);
-            await batch.commit();
-
-            return questionsSnap.size;
         }
 
         async function deleteQuestionBanks(scope) {
@@ -799,40 +1081,35 @@
 
             const button = document.getElementById(scope === "subject" ? "btn-delete-subject" : "btn-delete-all");
             try {
-                const bankDocs = await getQuestionBankDocsForDelete(scope);
-                if (!bankDocs.length) {
-                    showToast(scope === "subject" ? `No ${activeSubject} question bank found for your account.` : "No question banks found for your account.", "info");
+                const subjects = scope === "subject" ? [activeSubject] : Object.keys(SUBJECT_BANKS);
+                const questionDocs = await getOwnedQuestionDocs(subjects);
+                if (!questionDocs.length) {
+                    showToast(scope === "subject" ? `You have no questions in ${activeSubject}.` : "You have no questions to delete.", "info");
                     return;
                 }
 
-                const estimatedQuestions = bankDocs.reduce((sum, d) => sum + (Number(d.data().questionCount) || 0), 0);
-                const label = scope === "subject" ? activeSubject : "all of your question banks";
+                const label = scope === "subject" ? `your ${activeSubject} questions` : "all questions you added";
                 const ok = await showConfirm(
-                    `Delete <strong>${label}</strong>? This will remove ${bankDocs.length} bank record${bankDocs.length === 1 ? "" : "s"}${estimatedQuestions ? ` and about ${estimatedQuestions} question${estimatedQuestions === 1 ? "" : "s"}` : ""}. This cannot be undone.`,
-                    scope === "subject" ? "Delete Subject Bank" : "Delete All Question Banks",
+                    `Delete <strong>${label}</strong> (${questionDocs.length})? Default questions will remain unchanged. This cannot be undone.`,
+                    scope === "subject" ? "Delete My Subject Questions" : "Delete All My Questions",
                     "Delete",
                     true
                 );
                 if (!ok) return;
 
                 setButtonLoading(button, true, "Deleting...");
-                let deletedQuestions = 0;
-                for (const bankDoc of bankDocs) {
-                    deletedQuestions += await deleteQuestionBankDoc(bankDoc);
-                }
+                await deleteQuestionDocs(questionDocs);
 
-                await logActivity(user, "DELETE_QUESTION_BANKS", `Deleted ${label}`, {
+                await logActivity(user, "DELETE_QUESTIONS", `Deleted ${label}`, {
                     scope,
                     subject: scope === "subject" ? activeSubject : null,
-                    bankCount: bankDocs.length,
-                    questionCount: deletedQuestions
+                    questionCount: questionDocs.length
                 });
 
-                showToast(`Deleted ${bankDocs.length} bank${bankDocs.length === 1 ? "" : "s"} and ${deletedQuestions} question${deletedQuestions === 1 ? "" : "s"}.`, "success");
-                await loadMasterQuestions();
-                await loadStats();
+                showToast(`Deleted ${questionDocs.length} of your questions. Default questions were preserved.`, "success");
+                await Promise.all([loadMasterQuestions(), loadStats()]);
             } catch (err) {
-                showToast("Error deleting question bank: " + err.message, "error");
+                showToast("Error deleting questions: " + err.message, "error");
             } finally {
                 setButtonLoading(button, false);
                 updateDeleteControls();
@@ -841,43 +1118,78 @@
 
         // ─── Delete session ────────────────────────────────────────────
         window.deleteSession = async (sessionId, name) => {
-            const ok = await showConfirm(`Delete all questions in session "<strong>${name}</strong>"? This cannot be undone.`, "Delete Session");
-            if (!ok) return;
             try {
-                // Delete questions in subcollection
-                const qSnap = await getDocs(collection(db, "question_banks", sessionId, "questions"));
-                const batch = writeBatch(db);
-                qSnap.forEach(d => batch.delete(d.ref));
-                
-                // Delete session document
-                batch.delete(doc(db, "question_banks", sessionId));
-                
-                await batch.commit();
-
-                // Log activity
+                const owned = await getOwnedQuestionDocs(Object.keys(SUBJECT_BANKS));
+                const matching = owned.filter((questionDoc) => {
+                    const data = questionDoc.data();
+                    return String(data.importSessionId || "") === String(sessionId)
+                        || data.sessionName === name
+                        || data.customSessionName === name;
+                });
+                if (!matching.length) {
+                    showToast("No questions from that session belong to your account.", "info");
+                    return;
+                }
+                const ok = await showConfirm(`Delete your ${matching.length} question${matching.length === 1 ? "" : "s"} from "<strong>${escapeHtml(name)}</strong>"? Default questions will remain.`, "Delete My Session Questions", "Delete", true);
+                if (!ok) return;
+                await deleteQuestionDocs(matching);
                 await logActivity(user, "DELETE_QUESTIONS", `Deleted question session: ${name}`, {
                     sessionId,
                     sessionName: name,
-                    count: qSnap.size
+                    count: matching.length
                 });
-
-                showToast(`Session "${name}" deleted.`, "success");
+                await Promise.all([loadMasterQuestions(), loadStats()]);
+                showToast(`Deleted ${matching.length} of your questions from "${name}".`, "success");
             } catch (err) {
                 showToast("Error deleting session: " + err.message, "error");
             }
         };
 
         // Template download
-        document.getElementById("btn-download-template").addEventListener("click", () => {
-            const a = document.createElement("a");
-            a.href = "../question-bank-template.xlsx";
-            a.download = "question-bank-template.xlsx";
-            a.click();
-            logActivity(user, "DOWNLOAD_TEMPLATE", "Downloaded the question-bank import template", {
+        const templatePicker = document.getElementById("modal-template-picker");
+        const openTemplatePicker = () => {
+            templatePicker.classList.remove("hidden");
+            templatePicker.querySelector("[data-template-subject]")?.focus();
+        };
+        const closeTemplatePicker = () => {
+            templatePicker.classList.add("hidden");
+            document.getElementById("btn-download-template").focus();
+        };
+
+        document.getElementById("btn-download-template").addEventListener("click", openTemplatePicker);
+        document.getElementById("template-picker-close").addEventListener("click", closeTemplatePicker);
+        document.getElementById("template-picker-cancel").addEventListener("click", closeTemplatePicker);
+        templatePicker.addEventListener("click", (event) => {
+            if (event.target === templatePicker) {
+                closeTemplatePicker();
+                return;
+            }
+
+            const option = event.target.closest("[data-template-subject]");
+            if (!option) return;
+
+            const subject = option.dataset.templateSubject;
+            const template = QUESTION_BANK_TEMPLATES[subject];
+            if (!template) {
+                showToast("That question bank template is unavailable.", "error");
+                return;
+            }
+
+            const anchor = document.createElement("a");
+            anchor.href = template.url;
+            anchor.download = template.downloadName;
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+            closeTemplatePicker();
+
+            void logActivity(user, "DOWNLOAD_TEMPLATE", `Downloaded the ${subject} question-bank template`, {
                 operation: "READ",
-                entityType: "questionBank"
+                entityType: "questionBank",
+                subject,
+                fileName: template.fileName
             });
-            showToast("Template downloaded!", "info");
+            showToast(`${subject} template download started.`, "info");
         });
 
         // ─── Export logic ──────────────────────────────────────────────
@@ -889,6 +1201,7 @@
 
             // Map current (filtered or all) questions to spreadsheet format
             const exportData = masterFiltered.map(q => ({
+                "Bank ID": getBankQuestionNumber(q) || "",
                 "Question": q.questionText || "",
                 "Option A": q.optionA || "",
                 "Option B": q.optionB || "",
@@ -896,7 +1209,10 @@
                 "Option D": q.optionD || "",
                 "Answer": q.correctAnswer || "",
                 "Topic": q.topic || "",
-                "Category": q.category || ""
+                "Category": q.category || "",
+                "Source": getQuestionOrigin(q) === "default"
+                    ? "Default"
+                    : (getQuestionOrigin(q) === "admin" ? "Added by admin" : "Added by user")
             }));
 
             const wb = XLSX.utils.book_new();

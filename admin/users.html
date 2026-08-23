@@ -211,8 +211,9 @@
         import { initSidebar, showToast, showConfirm, openModal, closeModal, setButtonLoading, formatDate, formatDateTime, debounce } from "../js/ui.js";
         import { logActivity } from "../js/audit.js";
         import { lucideIcon } from "../js/lucide-icons.js";
-        import { db, auth } from "../js/firebase-config.js";
-        import { createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+        import { db, firebaseConfig } from "../js/firebase-config.js";
+        import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+        import { getAuth, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
         import {
             collection, getDocs, doc, updateDoc, setDoc, deleteDoc, serverTimestamp,
             query, orderBy, onSnapshot, where, addDoc
@@ -682,8 +683,17 @@
                     deadline.setDate(deadline.getDate() + 7);
                     userData.activationDeadline = deadline;
 
-                    // 1. Create in Firebase Auth
-                    const res = await createUserWithEmailAndPassword(auth, email, password);
+                    // Create the teacher in a secondary Auth instance so the current admin
+                    // remains authenticated while writing the new profile.
+                    const secondaryApp = initializeApp(firebaseConfig, `teacher-create-${Date.now()}`);
+                    const secondaryAuth = getAuth(secondaryApp);
+                    let res;
+                    try {
+                        res = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+                    } finally {
+                        await signOut(secondaryAuth).catch(() => {});
+                        await deleteApp(secondaryApp).catch(() => {});
+                    }
                     
                     // 2. Create profile in Firestore
                     userData.email = email;

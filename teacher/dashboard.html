@@ -132,7 +132,7 @@
         import { db } from "../js/firebase-config.js";
         import {
             collection, getCountFromServer, getDocs,
-            query, where, orderBy, limit, collectionGroup
+            query, where, orderBy, limit
         } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
         const user = await requireAuth("teacher");
@@ -166,6 +166,7 @@
             try {
                 let studentsQ = collection(db, "students");
                 let resultsQ = collection(db, "examResults");
+                const bankIds = ["default_mathematics", "default_esas", "default_professional_ee"];
                 
                 if (user.role !== "admin") {
                     resultsQ = query(resultsQ, where("teacherEmail", "==", user.email));
@@ -173,16 +174,21 @@
 
                 const [studentsResult, questionsResult, examsResult, resultsResult] = await Promise.allSettled([
                     getCountFromServer(studentsQ),
-                    getDocs(query(collectionGroup(db, "questions"))), // Fetch to filter
+                    Promise.all(bankIds.flatMap((bankId) => {
+                        const questions = collection(db, "question_banks", bankId, "questions");
+                        return [
+                            getCountFromServer(query(questions, where("isDefault", "==", true))),
+                            getCountFromServer(query(questions, where("uploadedByUid", "==", user.uid)))
+                        ];
+                    })),
                     getDocs(collection(db, "exams")),
                     getCountFromServer(resultsQ),
                 ]);
 
-                const questionDocs = questionsResult.status === "fulfilled" ? questionsResult.value.docs : [];
                 const examDocs = examsResult.status === "fulfilled" ? examsResult.value.docs : [];
-                const questionCount = user.role === "admin"
-                    ? questionDocs.length
-                    : questionDocs.filter(d => isOwnedByCurrentTeacher(d.data())).length;
+                const questionCount = questionsResult.status === "fulfilled"
+                    ? questionsResult.value.reduce((sum, result) => sum + result.data().count, 0)
+                    : 0;
                 const examCount = user.role === "admin"
                     ? examDocs.length
                     : examDocs.filter(d => isOwnedByCurrentTeacher(d.data())).length;

@@ -4,7 +4,7 @@ import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-aut
 import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { getStorage } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: "AIzaSyAVwY5T2OD5XaTu0ynNxgwZDrjPkJVL3rw",
   projectId: "boardexam-checker",
   storageBucket: "boardexam-checker.firebasestorage.app",
@@ -13,7 +13,7 @@ const firebaseConfig = {
   authDomain: "boardexam-checker.firebaseapp.com"
 };
 
-const app = initializeApp(firebaseConfig);
+export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);

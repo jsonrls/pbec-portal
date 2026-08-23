@@ -123,16 +123,18 @@
                             <table>
                                 <thead style="position: sticky; top: 0; background: var(--bg-surface); z-index: 10;">
                                     <tr>
+                                        <th style="width:90px;">ID</th>
                                         <th>Question</th>
                                         <th>Subject</th>
                                         <th>Topic</th>
                                         <th>Category</th>
                                         <th>Ans</th>
+                                        <th>Source</th>
                                         <th style="width:120px;">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody id="master-table-body">
-                                    <tr><td colspan="5" class="text-center py-24"><span class="spinner"></span></td></tr>
+                                    <tr><td colspan="8" class="text-center py-24"><span class="spinner"></span></td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -207,6 +209,18 @@
                     <input class="form-control" id="upload-session-name" placeholder="e.g. Midterm 2024 Set" />
                 </div>
 
+                <div class="form-group">
+                    <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+                        <input type="checkbox" id="upload-as-default" style="margin-top:3px;" />
+                        <span>
+                            Shared default question bank
+                            <small class="text-muted" style="display:block;font-weight:400;margin-top:3px;">
+                                Admin-only bank available read-only to every instructor.
+                            </small>
+                        </span>
+                    </label>
+                </div>
+
                 <div class="drop-zone" id="drop-zone">
                     <div class="drop-icon">📄</div>
                     <h4>Drop your file here</h4>
@@ -216,6 +230,10 @@
                         <span id="selected-file-name" class="badge badge-teal hidden"></span>
                     </div>
                 </div>
+                <button class="btn btn-secondary btn-sm mt-16" id="btn-use-supplied-default" type="button"
+                    style="width:100%;">
+                    Use supplied bank for selected subject
+                </button>
 
                 <div class="progress-bar mt-16 hidden" id="upload-progress-bar">
                     <div class="progress-fill" id="upload-progress-fill" style="width:0%"></div>
@@ -350,6 +368,33 @@
         </div>
     </div>
 
+    <div class="modal-overlay hidden" id="modal-template-picker">
+        <div class="modal" style="max-width:520px;" role="dialog" aria-modal="true" aria-labelledby="template-picker-title">
+            <div class="modal-header">
+                <span style="font-size:20px;">📥</span>
+                <h3 id="template-picker-title">Download Question Bank Template</h3>
+                <button type="button" class="modal-close" id="template-picker-close" aria-label="Close template selection">✕</button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted">Which question bank template do you want to download?</p>
+                <div style="display:grid;gap:10px;margin-top:16px;">
+                    <button type="button" class="btn btn-secondary" data-template-subject="Mathematics" style="justify-content:flex-start;">
+                        <span aria-hidden="true">📐</span> Mathematics
+                    </button>
+                    <button type="button" class="btn btn-secondary" data-template-subject="ESAS" style="justify-content:flex-start;">
+                        <span aria-hidden="true">🔬</span> Engineering Science and Allied Subjects (ESAS)
+                    </button>
+                    <button type="button" class="btn btn-secondary" data-template-subject="Professional EE" style="justify-content:flex-start;">
+                        <span aria-hidden="true">⚡</span> Professional Electrical Engineering
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="template-picker-cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <div id="toast-container"></div>
 
     <script type="module">
@@ -370,9 +415,10 @@
             query,
             onSnapshot,
             writeBatch,
+            runTransaction,
             where,
-            collectionGroup,
-            increment
+            increment,
+            getCountFromServer
         } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
         import {
             ref as storageRef,
@@ -382,6 +428,23 @@
         } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 
         const SUBJECTS = ["Mathematics", "ESAS", "Professional EE"];
+        const SUPPLIED_DEFAULT_BANKS = {
+            "Mathematics": {
+                fileName: "Mathematics.xlsx",
+                downloadName: "Mathematics Question Bank Template.xlsx",
+                url: "../assets/question-banks/Mathematics.xlsx"
+            },
+            "ESAS": {
+                fileName: "Engineering Science and Allied Subjects.xlsx",
+                downloadName: "ESAS Question Bank Template.xlsx",
+                url: "../assets/question-banks/Engineering%20Science%20and%20Allied%20Subjects.xlsx"
+            },
+            "Professional EE": {
+                fileName: "Professional Subjects.xlsx",
+                downloadName: "Professional EE Question Bank Template.xlsx",
+                url: "../assets/question-banks/Professional%20Subjects.xlsx"
+            }
+        };
         const ELEMENTS = {
             modeSwitch: document.getElementById("mode-switch"),
             questionView: document.getElementById("view-master-content"),
@@ -589,20 +652,19 @@
             let totalHandouts = 0;
 
             try {
-                const snap = await getDocs(collection(db, "question_banks"));
-                snap.forEach((bank) => {
-                    const data = bank.data();
-                    const subject = safeSubject(data.subject);
-                    const questionCount = Number(data.questionCount) || 0;
-                    const handoutCount = Number(data.handoutCount) || 0;
-
+                await Promise.all(SUBJECTS.map(async (subject) => {
+                    const bankId = defaultQuestionBankId(subject);
+                    const [questions, handouts] = await Promise.all([
+                        getCountFromServer(collection(db, "question_banks", bankId, "questions")),
+                        getCountFromServer(collection(db, "question_banks", bankId, "handouts"))
+                    ]);
+                    const questionCount = questions.data().count;
+                    const handoutCount = handouts.data().count;
                     totalQuestions += questionCount;
                     totalHandouts += handoutCount;
-                    if (subjectMap[subject]) {
-                        subjectMap[subject].q += questionCount;
-                        subjectMap[subject].h += handoutCount;
-                    }
-                });
+                    subjectMap[subject].q = questionCount;
+                    subjectMap[subject].h = handoutCount;
+                }));
 
                 ELEMENTS.qsMath.textContent = subjectMap.Mathematics.q;
                 ELEMENTS.qsEsas.textContent = subjectMap.ESAS.q;
@@ -627,6 +689,23 @@
             return String(value || "").toLowerCase().replace(/\s+/g, " ").trim();
         }
 
+        function getBankQuestionNumber(record = {}) {
+            const value = Number(record.bankQuestionId ?? record.questionNumber);
+            return Number.isSafeInteger(value) && value > 0 ? value : 0;
+        }
+
+        function getQuestionOrigin(record = {}) {
+            if (record.questionOrigin === "default" || record.isDefault === true) return "default";
+            if (record.questionOrigin === "admin") return "admin";
+            if (record.questionOrigin === "user") return "user";
+
+            const teacherId = toStr(record.uploadedByTeacherId).toUpperCase();
+            const isLegacyAdminQuestion = teacherId === "ADMIN"
+                || teacherId === toStr(adminTeacherId).toUpperCase()
+                || (record.uploadedByUid && record.uploadedByUid === user.uid);
+            return isLegacyAdminQuestion ? "admin" : "user";
+        }
+
         function normalizeSubjectName(value) {
             const lower = String(value || "").trim().toLowerCase();
             if (!lower) return null;
@@ -634,6 +713,18 @@
             if (lower.includes("esas")) return "ESAS";
             if (lower === "ee" || lower.includes("profee") || lower.includes("professional")) return "Professional EE";
             return null;
+        }
+
+        async function getCanonicalNestedDocs(subcollectionName, subjects = SUBJECTS) {
+            const snapshots = await Promise.all(subjects.map((subject) =>
+                getDocs(collection(
+                    db,
+                    "question_banks",
+                    defaultQuestionBankId(subject),
+                    subcollectionName
+                ))
+            ));
+            return snapshots.flatMap((snapshot) => snapshot.docs);
         }
 
         function suggestSubjectFromSheetName(sheetName) {
@@ -649,11 +740,11 @@
         }
 
         async function loadMasterQuestions() {
-            ELEMENTS.masterTable.innerHTML = `<tr><td colspan="6" class="text-center py-24"><span class="spinner"></span></td></tr>`;
+            ELEMENTS.masterTable.innerHTML = `<tr><td colspan="8" class="text-center py-24"><span class="spinner"></span></td></tr>`;
 
             try {
-                const snap = await getDocs(collectionGroup(db, "questions"));
-                const normalized = snap.docs
+                const questionDocs = await getCanonicalNestedDocs("questions");
+                const normalized = questionDocs
                     .map((docRef) => ({
                         _id: docRef.id,
                         _bankId: docRef.ref.parent.parent.id,
@@ -671,6 +762,12 @@
                     if (!normalizedText || seen.has(signature)) return false;
                     seen.add(signature);
                     return true;
+                }).sort((left, right) => {
+                    const subjectOrder = SUBJECTS.indexOf(left.subject) - SUBJECTS.indexOf(right.subject);
+                    if (subjectOrder) return subjectOrder;
+                    const leftNumber = getBankQuestionNumber(left) || Number.MAX_SAFE_INTEGER;
+                    const rightNumber = getBankQuestionNumber(right) || Number.MAX_SAFE_INTEGER;
+                    return leftNumber - rightNumber;
                 });
 
                 const topics = [...new Set(masterQuestions.map((q) => q.topic).filter(Boolean))].sort();
@@ -678,7 +775,7 @@
 
                 applyMasterFilters();
             } catch (err) {
-                ELEMENTS.masterTable.innerHTML = `<tr><td colspan="6" class="text-center py-24 text-danger">Failed to load questions: ${escapeHtml(err.message)}</td></tr>`;
+                ELEMENTS.masterTable.innerHTML = `<tr><td colspan="8" class="text-center py-24 text-danger">Failed to load questions: ${escapeHtml(err.message)}</td></tr>`;
             }
         }
 
@@ -705,7 +802,7 @@
 
         function renderMasterTable() {
             if (!masterFiltered.length) {
-                ELEMENTS.masterTable.innerHTML = `<tr><td colspan="6" class="text-center py-24 text-muted">No questions found.</td></tr>`;
+                ELEMENTS.masterTable.innerHTML = `<tr><td colspan="8" class="text-center py-24 text-muted">No questions found.</td></tr>`;
                 return;
             }
 
@@ -713,14 +810,22 @@
                 const categoryClass = q.category === "Computation" ? "badge-blue" : "badge-yellow";
                 const id = escapeHtml(q._id);
                 const bankId = escapeHtml(q._bankId);
+                const bankQuestionId = getBankQuestionNumber(q);
+                const origin = getQuestionOrigin(q);
+                const originLabel = origin === "default"
+                    ? "Default"
+                    : (origin === "admin" ? "Added by admin" : "Added by user");
+                const originClass = origin === "default" ? "badge-gray" : (origin === "admin" ? "badge-blue" : "badge-teal");
 
                 return `
                     <tr>
+                        <td class="fw-600 text-accent">${bankQuestionId || "—"}</td>
                         <td class="text-sm" style="max-width:340px; white-space:normal;">${escapeHtml(q.questionText) || "—"}</td>
                         <td><span class="badge badge-teal">${escapeHtml(q.subject || "—")}</span></td>
                         <td class="text-xs text-muted">${escapeHtml(q.topic || "—")}</td>
                         <td><span class="badge ${categoryClass}">${escapeHtml(q.category || "—")}</span></td>
                         <td class="fw-600 text-accent">${escapeHtml(q.correctAnswer || "—")}</td>
+                        <td><span class="badge ${originClass}">${originLabel}</span></td>
                         <td>
                             <div class="td-actions">
                                 <button class="btn btn-secondary btn-icon btn-sm" data-question-action="edit" data-question-id="${id}" data-question-bank="${bankId}" title="Edit Question" aria-label="Edit Question">✏️</button>
@@ -855,31 +960,30 @@
                         sourceFileName: null
                     });
 
-                    const qRef = doc(collection(db, "question_banks", bank.id, "questions"));
-                    await setDoc(qRef, {
-                        ...payload,
-                        itemType: "question",
-                        importSessionId: bank.id,
-                        sourceFileName: payload.sessionName,
-                        uploadedByTeacherId: adminTeacherId,
-                        uploadedByUid: user.uid || "",
-                        uploaderEmail: user.email,
-                        createdAt: serverTimestamp()
-                    });
-
-                    await updateDoc(bank, {
-                        questionCount: increment(1),
+                    const [createdQuestion] = await createQuestionsWithBankSequence({
+                        bankId: bank.id,
                         subject: payload.subject,
-                        sessionName: payload.sessionName,
-                        uploadedByTeacherId: adminTeacherId,
-                        uploadedByUid: user.uid || "",
-                        uploaderEmail: user.email,
-                        updatedAt: serverTimestamp()
+                        questionOrigin: "admin",
+                        payloads: [{
+                            ...payload,
+                            itemType: "question",
+                            questionBankId: bank.id,
+                            importSessionId: bank.id,
+                            sourceFileName: payload.sessionName,
+                            fileName: payload.sessionName,
+                            isDefault: false,
+                            uploadedByTeacherId: adminTeacherId,
+                            uploadedByUid: user.uid || "",
+                            uploaderEmail: user.email,
+                            createdAt: serverTimestamp()
+                        }]
                     });
 
                     await logActivity(user, "CREATE_QUESTION", `Created question: ${payload.questionText.substring(0, 60)}`, {
                         entityType: "questionBank",
+                        entityId: String(createdQuestion.id),
                         targetType: "question",
+                        bankQuestionId: createdQuestion.bankQuestionId,
                         questionText: payload.questionText.substring(0, 200),
                         subject: payload.subject,
                         sessionName: payload.sessionName,
@@ -906,10 +1010,13 @@
             try {
                 const bankRef = doc(db, "question_banks", record._bankId);
                 await deleteDoc(record._ref);
-                await updateDoc(bankRef, {
-                    questionCount: increment(-1),
-                    lastUpdatedAt: serverTimestamp()
-                });
+                if (record.isDefault === true) {
+                    await updateDoc(bankRef, {
+                        questionCount: increment(-1),
+                        defaultQuestionCount: increment(-1),
+                        lastUpdatedAt: serverTimestamp()
+                    });
+                }
 
                 await logActivity(user, "DELETE_QUESTION", `Deleted question: ${toStr(record.questionText).substring(0, 60)}`, {
                     entityType: "questionBank",
@@ -1005,44 +1112,128 @@
             }
         }
 
-        async function findOrCreateBank({ subject, sessionName, sourceFileName }) {
-            const normalizedSessionName = toStr(sessionName || FALLBACK_QUESTION_SESSION).trim();
-            const normalizedSource = toStr(sourceFileName || "").trim().toLowerCase();
+        function defaultQuestionBankId(subject) {
+            const slug = toStr(subject)
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, "_")
+                .replace(/^_+|_+$/g, "");
+            return `default_${slug}`;
+        }
 
-            const q = query(
-                collection(db, "question_banks"),
-                where("subject", "==", subject),
-                where("uploadedByTeacherId", "==", adminTeacherId)
+        function stableDefaultQuestionId(subject, questionText) {
+            const input = `${subject}|${normalizeQuestionSignature(questionText)}`;
+            let hash = 1469598103934665603n;
+            for (const character of input) {
+                hash ^= BigInt(character.codePointAt(0));
+                hash = BigInt.asUintN(64, hash * 1099511628211n);
+            }
+            const safeInteger = Number(hash & 0x1fffffffffffffn);
+            return safeInteger || 1;
+        }
+
+        const MAX_BANK_QUESTION_NUMBER = 2_147_483_647;
+        const MAX_SEQUENCE_TRANSACTION_SIZE = 400;
+        const bankSequenceSeedCache = new Map();
+
+        function newQuestionId(reservedIds = new Set()) {
+            let id = 0;
+            do {
+                const words = crypto.getRandomValues(new Uint32Array(2));
+                id = (words[0] & 0x1fffff) * 0x100000000 + words[1];
+            } while (!id || reservedIds.has(id));
+            return id;
+        }
+
+        async function getCurrentBankSequenceMax(bankId) {
+            if (bankSequenceSeedCache.has(bankId)) return bankSequenceSeedCache.get(bankId);
+
+            const snapshot = await getDocs(collection(db, "question_banks", bankId, "questions"));
+            const maximum = snapshot.docs.reduce(
+                (current, questionDoc) => Math.max(current, getBankQuestionNumber(questionDoc.data())),
+                0
             );
+            bankSequenceSeedCache.set(bankId, maximum);
+            return maximum;
+        }
 
-            const snap = await getDocs(q);
-            const normalizedSourceFile = normalizedSource.toLowerCase();
-            const existing = snap.docs.find((docSnapshot) => {
-                const data = docSnapshot.data();
-                const existingSession = toStr(data.sessionName).toLowerCase();
-                const existingSource = toStr(data.sourceFileName).toLowerCase();
-                return existingSession === normalizedSessionName.toLowerCase() ||
-                    (normalizedSource && existingSource && existingSource === normalizedSource) ||
-                    (!data.questionCount && !data.handoutCount && existingSession === normalizedSessionName.toLowerCase());
-            });
-
-            if (existing) {
-                return existing.ref;
+        async function createQuestionsWithBankSequence({ bankId, subject, payloads, questionOrigin }) {
+            if (!payloads.length) return [];
+            if (payloads.length > MAX_SEQUENCE_TRANSACTION_SIZE) {
+                throw new Error(`A question sequence transaction cannot exceed ${MAX_SEQUENCE_TRANSACTION_SIZE} questions.`);
             }
 
-            const bankRef = doc(collection(db, "question_banks"));
-            await setDoc(bankRef, {
-                subject,
-                sessionName: normalizedSessionName,
-                sourceFileName: sourceFileName || "",
-                uploaderEmail: user.email,
-                uploadedByTeacherId: adminTeacherId,
-                uploadedByUid: user.uid || "",
-                questionCount: 0,
-                handoutCount: 0,
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp()
+            const seedMaximum = await getCurrentBankSequenceMax(bankId);
+            const bankRef = doc(db, "question_banks", bankId);
+            const reservedIds = new Set();
+            const prepared = payloads.map((payload) => {
+                const requestedId = Number(payload.id);
+                const id = Number.isSafeInteger(requestedId) && requestedId > 0
+                    ? requestedId
+                    : newQuestionId(reservedIds);
+                if (reservedIds.has(id)) throw new Error(`Duplicate question ID ${id} in this upload.`);
+                reservedIds.add(id);
+                return { payload, id };
             });
+
+            const created = await runTransaction(db, async (transaction) => {
+                const bankSnapshot = await transaction.get(bankRef);
+                if (!bankSnapshot.exists()) throw new Error(`Question bank not found for ${subject}.`);
+
+                const storedMaximum = Number(bankSnapshot.data().lastQuestionNumber);
+                const currentMaximum = Math.max(
+                    Number.isSafeInteger(storedMaximum) && storedMaximum > 0 ? storedMaximum : 0,
+                    seedMaximum
+                );
+                const nextMaximum = currentMaximum + prepared.length;
+                if (nextMaximum > MAX_BANK_QUESTION_NUMBER) {
+                    throw new Error(`${subject} has reached the supported question-number limit.`);
+                }
+
+                transaction.update(bankRef, {
+                    lastQuestionNumber: nextMaximum,
+                    sequenceUpdatedAt: serverTimestamp(),
+                    sequenceUpdatedByUid: user.uid || "",
+                    sequenceUpdatedByRole: "admin"
+                });
+
+                return prepared.map(({ payload, id }, index) => {
+                    const bankQuestionId = currentMaximum + index + 1;
+                    const questionRef = doc(db, "question_banks", bankId, "questions", String(id));
+                    const question = {
+                        ...payload,
+                        id,
+                        questionNumber: bankQuestionId,
+                        bankQuestionId,
+                        questionOrigin
+                    };
+                    transaction.set(questionRef, question);
+                    return question;
+                });
+            });
+
+            bankSequenceSeedCache.set(bankId, Math.max(
+                bankSequenceSeedCache.get(bankId) || 0,
+                ...created.map((question) => question.bankQuestionId)
+            ));
+            return created;
+        }
+
+        async function findOrCreateBank({ subject, sessionName, sourceFileName, isDefault = false }) {
+            const bankId = defaultQuestionBankId(subject);
+            const bankRef = doc(db, "question_banks", bankId);
+            await setDoc(bankRef, {
+                questionBankId: bankId,
+                subject,
+                sessionName: "Default Question Bank",
+                displayName: `${subject} Question Bank`,
+                ...(isDefault ? { sourceFileName: sourceFileName || "" } : {}),
+                bankType: "canonical",
+                isDefault: true,
+                uploadedByTeacherId: "",
+                uploadedByUid: "",
+                uploaderEmail: null,
+                updatedAt: serverTimestamp()
+            }, { merge: true });
 
             return bankRef;
         }
@@ -1051,6 +1242,7 @@
         const openUploadModal = () => {
             document.getElementById("modal-upload").classList.remove("hidden");
             selectedFile = null;
+            document.getElementById("upload-as-default").checked = false;
             document.getElementById("selected-file-name").classList.add("hidden");
             document.getElementById("upload-submit").disabled = true;
             document.getElementById("upload-status").textContent = "";
@@ -1080,6 +1272,41 @@
         });
         questionFileInput.addEventListener("change", () => {
             if (questionFileInput.files?.[0]) handleQuestionFile(questionFileInput.files[0]);
+        });
+
+        document.getElementById("btn-use-supplied-default").addEventListener("click", async () => {
+            const subject = document.getElementById("upload-subject").value;
+            const suppliedBank = SUPPLIED_DEFAULT_BANKS[subject];
+            const statusEl = document.getElementById("upload-status");
+            const button = document.getElementById("btn-use-supplied-default");
+
+            if (!suppliedBank) {
+                showToast("No supplied default bank is configured for this subject.", "warning");
+                return;
+            }
+
+            setButtonLoading(button, true, "Loading…");
+            statusEl.textContent = `Loading ${suppliedBank.fileName}…`;
+            try {
+                const response = await fetch(suppliedBank.url);
+                if (!response.ok) {
+                    throw new Error(`Could not load ${suppliedBank.fileName} (${response.status}).`);
+                }
+                const workbookBlob = await response.blob();
+                handleQuestionFile(new File([workbookBlob], suppliedBank.fileName, {
+                    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                }));
+                document.getElementById("upload-as-default").checked = true;
+                document.getElementById("upload-session-name").value = "Default Question Bank";
+                statusEl.textContent = `${suppliedBank.fileName} is ready to import as the shared default.`;
+            } catch (error) {
+                selectedFile = null;
+                document.getElementById("upload-submit").disabled = true;
+                statusEl.textContent = `❌ ${error.message}`;
+                showToast(error.message, "error");
+            } finally {
+                setButtonLoading(button, false);
+            }
         });
 
         function handleQuestionFile(file) {
@@ -1223,27 +1450,48 @@
             };
         }
 
-        function mapQuestionForBank(question, sessionName, sourceFileName, subject) {
-            return {
+        function mapQuestionForBank(question, sessionName, sourceFileName, subject, isDefault, questionBankId) {
+            const payload = {
                 ...question,
                 subject,
                 topic: question.topic || "General",
-                sessionName,
+                sessionName: isDefault ? "Default Question Bank" : sessionName,
                 itemType: "question",
-                importSessionName: sessionName,
+                importSessionName: isDefault ? "Default Question Bank" : sessionName,
+                importSessionId: questionBankId,
+                questionBankId,
                 sourceFileName,
+                fileName: sourceFileName.replace(/\.[^.]+$/, ""),
+                isDefault,
+                questionOrigin: isDefault ? "default" : "admin",
                 importedAt: serverTimestamp(),
-                uploaderEmail: user.email,
-                uploadedByTeacherId: adminTeacherId,
-                uploadedByUid: user.uid || ""
+                uploaderEmail: isDefault ? null : user.email,
+                uploadedByTeacherId: isDefault ? "" : adminTeacherId,
+                uploadedByUid: isDefault ? "" : (user.uid || "")
             };
+
+            if (isDefault) {
+                payload.id = stableDefaultQuestionId(subject, question.questionText);
+            }
+            return payload;
+        }
+
+        function mapQuestionUpdateForBank(...args) {
+            const payload = mapQuestionForBank(...args);
+            delete payload.id;
+            delete payload.questionNumber;
+            delete payload.bankQuestionId;
+            return payload;
         }
 
         document.getElementById("upload-submit").addEventListener("click", async () => {
             if (!selectedFile) return;
 
             const subject = document.getElementById("upload-subject").value;
-            const sessionName = document.getElementById("upload-session-name").value.trim() || selectedFile.name;
+            const importAsDefault = document.getElementById("upload-as-default").checked;
+            const sessionName = importAsDefault
+                ? "Default Question Bank"
+                : (document.getElementById("upload-session-name").value.trim() || selectedFile.name);
             const uploadBtn = document.getElementById("upload-submit");
             const statusEl = document.getElementById("upload-status");
             const progressBar = document.getElementById("upload-progress-bar");
@@ -1268,7 +1516,7 @@
                             throw new Error("No valid questions found in file.");
                         }
 
-                        const normalizedExisting = await getDocs(collectionGroup(db, "questions"));
+                        const normalizedExisting = await getCanonicalNestedDocs("questions");
                         const existingMap = new Map();
 
                         normalizedExisting.forEach((docSnap) => {
@@ -1279,7 +1527,7 @@
                                 toStr(record.uploadedByTeacherId) === adminTeacherId ||
                                 toStr(record.uploadedByUid) === (user.uid || "");
 
-                            if (!sameUploader) return;
+                            if (!sameUploader || importAsDefault) return;
 
                             const key = `${normalizeQuestionSignature(record.questionText)}|${toStr(record.subject)}`;
                             if (!existingMap.has(key)) existingMap.set(key, []);
@@ -1308,17 +1556,26 @@
                             const bankRef = await findOrCreateBank({
                                 subject: subjectName,
                                 sessionName,
-                                sourceFileName: selectedFile.name
+                                sourceFileName: selectedFile.name,
+                                isDefault: importAsDefault
                             });
 
                             const bankQuestionsSnap = await getDocs(collection(db, "question_banks", bankRef.id, "questions"));
                             const bankQuestionMap = new Map();
+                            const protectedQuestionKeys = new Set();
 
                             bankQuestionsSnap.forEach((docSnap) => {
                                 const questionData = docSnap.data();
                                 if (!isQuestionRecord(questionData)) return;
 
                                 const key = `${normalizeQuestionSignature(questionData.questionText)}|${subjectName}`;
+                                const isEligibleForUpdate = importAsDefault
+                                    ? questionData.isDefault === true
+                                    : questionData.isDefault !== true && questionData.uploadedByUid === (user.uid || "");
+                                if (!isEligibleForUpdate) {
+                                    protectedQuestionKeys.add(key);
+                                    return;
+                                }
                                 if (!bankQuestionMap.has(key)) bankQuestionMap.set(key, []);
                                 bankQuestionMap.get(key).push(docSnap.id);
                             });
@@ -1336,12 +1593,17 @@
                                 }
                                 seenInFile.add(key);
 
+                                const normalizedQuestion = {
+                                    ...question,
+                                    questionNumber: seenInFile.size
+                                };
+
                                 if (bankQuestionMap.has(key)) {
-                                    toUpdate.push({ ids: bankQuestionMap.get(key), newData: question });
-                                } else if (existingMap.has(key)) {
+                                    toUpdate.push({ ids: bankQuestionMap.get(key), newData: normalizedQuestion });
+                                } else if (!importAsDefault && (existingMap.has(key) || protectedQuestionKeys.has(key))) {
                                     duplicateCount++;
                                 } else {
-                                    toCreate.push(question);
+                                    toCreate.push(normalizedQuestion);
                                 }
                             });
 
@@ -1364,7 +1626,14 @@
                                         item.ids.forEach((docId) => {
                                             const updateRef = doc(db, "question_banks", bankRef.id, "questions", docId);
                                             batch.update(updateRef, {
-                                                ...mapQuestionForBank(item.newData, sessionName, selectedFile.name, subjectName),
+                                                ...mapQuestionUpdateForBank(
+                                                    item.newData,
+                                                    sessionName,
+                                                    selectedFile.name,
+                                                    subjectName,
+                                                    importAsDefault,
+                                                    bankRef.id
+                                                ),
                                                 updatedAt: serverTimestamp(),
                                                 updatedBy: user.email
                                             });
@@ -1377,29 +1646,48 @@
 
                             if (toCreate.length > 0) {
                                 statusEl.textContent = `Adding ${toCreate.length} ${subjectName} questions…`;
-                                for (let index = 0; index < toCreate.length; index += 500) {
-                                    const batch = writeBatch(db);
-                                    const chunk = toCreate.slice(index, index + 500);
-
-                                    chunk.forEach((question) => {
-                                        const qRef = doc(collection(db, "question_banks", bankRef.id, "questions"));
-                                        batch.set(qRef, mapQuestionForBank(question, sessionName, selectedFile.name, subjectName));
+                                for (let index = 0; index < toCreate.length; index += MAX_SEQUENCE_TRANSACTION_SIZE) {
+                                    const chunk = toCreate.slice(index, index + MAX_SEQUENCE_TRANSACTION_SIZE);
+                                    const payloads = chunk.map((question) => {
+                                        const payload = mapQuestionForBank(
+                                            question,
+                                            sessionName,
+                                            selectedFile.name,
+                                            subjectName,
+                                            importAsDefault,
+                                            bankRef.id
+                                        );
+                                        payload.sourceQuestionNumber = question.questionNumber;
+                                        return payload;
                                     });
-                                    await batch.commit();
+                                    await createQuestionsWithBankSequence({
+                                        bankId: bankRef.id,
+                                        subject: subjectName,
+                                        payloads,
+                                        questionOrigin: importAsDefault ? "default" : "admin"
+                                    });
                                 }
 
-                                await updateDoc(bankRef, {
-                                    questionCount: increment(toCreate.length),
-                                    subject: subjectName,
-                                    sessionName,
-                                    sourceFileName: selectedFile.name,
-                                    uploadedByTeacherId: adminTeacherId,
-                                    uploadedByUid: user.uid || "",
-                                    uploaderEmail: user.email,
-                                    updatedAt: serverTimestamp()
-                                });
-
                                 totalCreated += toCreate.length;
+                            }
+
+                            if (importAsDefault) {
+                                const currentDefaultCount = bankQuestionsSnap.docs
+                                    .filter((questionDoc) => questionDoc.data().isDefault === true).length;
+                                await setDoc(bankRef, {
+                                    questionBankId: bankRef.id,
+                                    questionCount: currentDefaultCount + toCreate.length,
+                                    defaultQuestionCount: currentDefaultCount + toCreate.length,
+                                    subject: subjectName,
+                                    sessionName: "Default Question Bank",
+                                    displayName: "Default Question Bank",
+                                    sourceFileName: selectedFile.name,
+                                    isDefault: true,
+                                    uploadedByTeacherId: "",
+                                    uploadedByUid: "",
+                                    uploaderEmail: null,
+                                    updatedAt: serverTimestamp()
+                                }, { merge: true });
                             }
 
                             if (toUpdate.length > 0) {
@@ -1420,8 +1708,9 @@
                         progressFill.style.width = "100%";
                         statusEl.textContent = `✅ Processed ${importedBankCount} subject banks from ${sheetSummary}: ${totalUpdated} updated, ${totalCreated} added.`;
 
-                        await logActivity(user, "UPLOAD_QUESTIONS", `Processed ${totalUpdated + totalCreated} questions across ${importedBankCount} subject banks from ${sheetSummary}.`, {
+                        await logActivity(user, importAsDefault ? "IMPORT_DEFAULT_QUESTION_BANK" : "UPLOAD_QUESTIONS", `Processed ${totalUpdated + totalCreated} questions across ${importedBankCount} subject banks from ${sheetSummary}.`, {
                             operation: "CREATE",
+                            isDefault: importAsDefault,
                             total: totalUpdated + totalCreated,
                             updated: totalUpdated,
                             added: totalCreated,
@@ -1673,42 +1962,7 @@
         }
 
         async function findOrCreateHandoutBank({ subject, sourceFileName }) {
-            const cachedBankId = handoutBankCache.get(subject);
-            if (cachedBankId) return doc(db, "question_banks", cachedBankId);
-
-            const normalizedSessionName = FALLBACK_HANDOUT_SESSION;
-            const q = query(
-                collection(db, "question_banks"),
-                where("subject", "==", subject),
-                where("uploadedByTeacherId", "==", adminTeacherId)
-            );
-
-            const snap = await getDocs(q);
-            const matched = snap.docs.find((docSnap) => {
-                const data = docSnap.data();
-                return toStr(data.sessionName).trim() === normalizedSessionName ||
-                    (toStr(data.sessionName).trim() === "" && toStr(data.sourceFileName).trim() === toStr(sourceFileName || "").trim());
-            });
-
-            if (matched) {
-                handoutBankCache.set(subject, matched.id);
-                return matched.ref;
-            }
-
-            const bankRef = doc(collection(db, "question_banks"));
-            await setDoc(bankRef, {
-                subject,
-                sessionName: normalizedSessionName,
-                sourceFileName: sourceFileName || "",
-                uploaderEmail: user.email,
-                uploadedByTeacherId: adminTeacherId,
-                uploadedByUid: user.uid || "",
-                questionCount: 0,
-                handoutCount: 0,
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp()
-            });
-
+            const bankRef = await findOrCreateBank({ subject, sourceFileName, isDefault: false });
             handoutBankCache.set(subject, bankRef.id);
             return bankRef;
         }
@@ -1809,11 +2063,6 @@
 
                     write.update(bankRef, {
                         handoutCount: increment(1),
-                        subject,
-                        sessionName,
-                        uploaderEmail: user.email,
-                        uploadedByTeacherId: adminTeacherId,
-                        uploadedByUid: user.uid || "",
                         updatedAt: serverTimestamp()
                     });
 
@@ -1992,8 +2241,8 @@
             ELEMENTS.handoutTable.innerHTML = `<tr><td colspan="5" class="text-center py-24"><span class="spinner"></span></td></tr>`;
 
             try {
-                const snap = await getDocs(collectionGroup(db, "handouts"));
-                masterHandouts = snap.docs
+                const handoutDocs = await getCanonicalNestedDocs("handouts");
+                masterHandouts = handoutDocs
                     .map(mapNestedHandoutDoc)
                     .filter(Boolean);
 
@@ -2110,11 +2359,9 @@
             }
 
             try {
-                const q = query(
-                    collectionGroup(db, "handouts")
-                );
-                const snap = await getDocs(q);
-                const handoutDocs = snap.docs
+                const subjects = scopeType === "subject" ? [activeSubject] : SUBJECTS;
+                const nestedHandoutDocs = await getCanonicalNestedDocs("handouts", subjects);
+                const handoutDocs = nestedHandoutDocs
                     .map(mapNestedHandoutDoc)
                     .filter(Boolean)
                     .filter((handout) => scopeType === "all" || handout.subject === activeSubject);
@@ -2214,6 +2461,7 @@
             }
 
             const exportData = masterFiltered.map((q) => ({
+                "Bank ID": getBankQuestionNumber(q) || "",
                 "Question": q.questionText || "",
                 "Option A": q.optionA || "",
                 "Option B": q.optionB || "",
@@ -2222,7 +2470,10 @@
                 "Answer": q.correctAnswer || "",
                 "Topic": q.topic || "",
                 "Category": q.category || "",
-                "Subject": q.subject || ""
+                "Subject": q.subject || "",
+                "Source": getQuestionOrigin(q) === "default"
+                    ? "Default"
+                    : (getQuestionOrigin(q) === "admin" ? "Added by admin" : "Added by user")
             }));
 
             const wb = XLSX.utils.book_new();
@@ -2241,18 +2492,51 @@
             showToast("Question bank exported!", "success");
         });
 
-        document.getElementById("btn-download-template").addEventListener("click", () => {
-            const anchor = document.createElement("a");
-            anchor.href = "../question-bank-template.xlsx";
-            anchor.download = "question-bank-template.xlsx";
-            anchor.click();
+        const templatePicker = document.getElementById("modal-template-picker");
+        const openTemplatePicker = () => {
+            templatePicker.classList.remove("hidden");
+            templatePicker.querySelector("[data-template-subject]")?.focus();
+        };
+        const closeTemplatePicker = () => {
+            templatePicker.classList.add("hidden");
+            document.getElementById("btn-download-template").focus();
+        };
 
-            logActivity(user, "DOWNLOAD_TEMPLATE", "Downloaded the question-bank import template", {
+        document.getElementById("btn-download-template").addEventListener("click", openTemplatePicker);
+        document.getElementById("template-picker-close").addEventListener("click", closeTemplatePicker);
+        document.getElementById("template-picker-cancel").addEventListener("click", closeTemplatePicker);
+        templatePicker.addEventListener("click", (event) => {
+            if (event.target === templatePicker) {
+                closeTemplatePicker();
+                return;
+            }
+
+            const option = event.target.closest("[data-template-subject]");
+            if (!option) return;
+
+            const subject = option.dataset.templateSubject;
+            const template = SUPPLIED_DEFAULT_BANKS[subject];
+            if (!template) {
+                showToast("That question bank template is unavailable.", "error");
+                return;
+            }
+
+            const anchor = document.createElement("a");
+            anchor.href = template.url;
+            anchor.download = template.downloadName;
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+            closeTemplatePicker();
+
+            void logActivity(user, "DOWNLOAD_TEMPLATE", `Downloaded the ${subject} question-bank template`, {
                 operation: "READ",
-                entityType: "questionBank"
+                entityType: "questionBank",
+                subject,
+                fileName: template.fileName
             });
 
-            showToast("Template downloaded!", "info");
+            showToast(`${subject} template download started.`, "info");
         });
 
         initFilters();

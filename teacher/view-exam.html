@@ -279,10 +279,15 @@
         import { db } from "../js/firebase-config.js";
         import { logActivity } from "../js/audit.js";
         import {
-            collection, getDoc, getDocs, doc, collectionGroup, query, where
+            collection, getDoc, getDocs, doc, query, where
         } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
         const user = await requireAuth("teacher");
+        const SUBJECT_BANKS = Object.freeze({
+            "Mathematics": "default_mathematics",
+            "ESAS": "default_esas",
+            "Professional EE": "default_professional_ee"
+        });
         document.getElementById("sidebar-mount").innerHTML = renderSidebar("exams", user);
         document.getElementById("user-email-display").textContent = user.name || user.email;
         document.getElementById("user-avatar").textContent = (user.name || user.email)[0].toUpperCase();
@@ -413,14 +418,23 @@
                 }
 
                 globalQMap = {};
-                // Fetch all questions to populate qMap
-                const qQuery = collectionGroup(db, "questions");
-                const qSnap = await getDocs(qQuery);
-                qSnap.forEach(d => { 
-                    const data = d.data();
-                    globalQMap[d.id] = data; 
-                    if (data.id) globalQMap[data.id] = data; // Fallback for custom id fields
-                });
+                const canonicalBankId = SUBJECT_BANKS[inferredSubject];
+                const selectedBanks = examData.selectedQuestionBankIds || examData.sessionIds || [];
+                const bankIds = canonicalBankId && (selectedBanks.length === 0 || selectedBanks.includes(canonicalBankId))
+                    ? [canonicalBankId]
+                    : [];
+                for (const bankId of bankIds) {
+                    const questions = collection(db, "question_banks", bankId, "questions");
+                    const [defaults, owned] = await Promise.all([
+                        getDocs(query(questions, where("isDefault", "==", true))),
+                        getDocs(query(questions, where("uploadedByUid", "==", user.uid)))
+                    ]);
+                    [...defaults.docs, ...owned.docs].forEach((questionDoc) => {
+                        const data = questionDoc.data();
+                        globalQMap[questionDoc.id] = data;
+                        if (data.id != null) globalQMap[String(data.id)] = data;
+                    });
+                }
 
                 renderQuestions();
                 document.getElementById("exam-loading").classList.add("hidden");
