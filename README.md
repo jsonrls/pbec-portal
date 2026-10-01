@@ -30,8 +30,8 @@ authDomain: boardexam-checker.firebaseapp.com
 Firebase services used by the portal:
 
 - Firebase Authentication
-- Anonymous Authentication, used for Teacher ID login sessions
-- Email/Password Authentication, used for email-based admin or teacher login
+- Anonymous Authentication, used temporarily to look up a Teacher ID
+- Email/Password Authentication, used for all password verification, including Teacher ID login
 - Cloud Firestore
 
 Before running against a new Firebase project, confirm these are enabled in the Firebase console:
@@ -301,7 +301,9 @@ Check:
 
 - The Teacher ID exists in `users.teacherId`.
 - The user is active.
-- The entered password matches the stored `passwordHash`.
+- The entered password matches Firebase Authentication for the profile email. Legacy `passwordHash` fields are ignored.
+- The profile document ID matches the Firebase Authentication UID.
+- The account is not temporarily locked after failed credential attempts.
 - Anonymous Auth is enabled in Firebase.
 
 ### Query requires an index
@@ -331,8 +333,9 @@ email
 role
 status or isActive
 teacherId, for teacher accounts
-passwordHash, for Teacher ID login
 ```
+
+Administrator password recovery sends a Firebase reset-email request. The account owner must follow the link to change the password; requesting it does not activate or unlock the profile. Email delivery is not confirmed by the request succeeding.
 
 ## Production Notes
 

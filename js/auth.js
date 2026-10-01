@@ -149,14 +149,6 @@ function redirectToLogin() {
     window.location.replace(getLoginPath());
 }
 
-// Security Helper: SHA-256 Hashing (matches mobile app implementation)
-async function hashPassword(password) {
-    const msgBuffer = new TextEncoder().encode(password.trim());
-    const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
-}
-
 async function findUserByTeacherIdentifier(identifier) {
     const usersRef = collection(db, "users");
     const teacherIdQuery = query(usersRef, where("teacherId", "==", identifier), limit(1));
@@ -339,8 +331,17 @@ export async function login(identifier, password) {
             throw { code: "auth/account-locked" };
         }
 
-        const inputHash = await hashPassword(password);
-        if (!userData.passwordHash || userData.passwordHash.toLowerCase() !== inputHash.toLowerCase()) {
+        if (!userData.email) {
+            throw { code: "auth/missing-email" };
+        }
+
+        // Firebase Auth is the password authority, including after email recovery.
+        let credential;
+        try {
+            credential = await signInWithEmailAndPassword(auth, userData.email, password);
+        } catch (error) {
+            const credentialErrors = ["auth/invalid-credential", "auth/invalid-login-credentials", "auth/wrong-password", "auth/user-not-found"];
+            if (!credentialErrors.includes(error.code)) throw error;
             const failedLoginAttempts = Number(userData.failedLoginAttempts || 0) + 1;
             const failedUpdate = {
                 failedLoginAttempts,
@@ -364,17 +365,9 @@ export async function login(identifier, password) {
                     failedLoginAttempts
                 }
             );
-            console.error("Password mismatch");
-            throw { code: failedLoginAttempts >= MAX_FAILED_ATTEMPTS ? "auth/account-locked" : "auth/wrong-password" };
+            throw { code: failedLoginAttempts >= MAX_FAILED_ATTEMPTS ? "auth/account-locked" : error.code };
         }
 
-        if (!userData.email) {
-            throw { code: "auth/missing-email" };
-        }
-
-        // Replace the temporary anonymous lookup session with the teacher's stable Firebase
-        // identity. Question ownership is enforced by this UID in Firestore rules.
-        const credential = await signInWithEmailAndPassword(auth, userData.email, password);
         if (credential.user.uid !== userDoc.id) {
             await signOut(auth).catch(() => {});
             throw { code: "auth/profile-mismatch" };
@@ -387,8 +380,9 @@ export async function login(identifier, password) {
         }).catch((err) => console.warn("Could not update login status:", err));
         
         // Persist session before returning
+        const { passwordHash, ...profileData } = userData;
         const sessionPayload = { 
-            ...userData, 
+            ...profileData,
             uid: credential.user.uid,
             teacherId: userData.teacherId || userData.instructorId || tid,
             role: userData.role || "teacher", // Ensure role exists

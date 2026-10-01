@@ -211,9 +211,9 @@
         import { initSidebar, showToast, showConfirm, openModal, closeModal, setButtonLoading, formatDate, formatDateTime, debounce } from "../js/ui.js";
         import { logActivity } from "../js/audit.js";
         import { lucideIcon } from "../js/lucide-icons.js";
-        import { db, firebaseConfig } from "../js/firebase-config.js";
+        import { auth, db, firebaseConfig } from "../js/firebase-config.js";
         import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-        import { getAuth, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+        import { getAuth, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
         import {
             collection, getDocs, doc, updateDoc, setDoc, deleteDoc, serverTimestamp,
             query, orderBy, onSnapshot, where, addDoc
@@ -239,14 +239,6 @@
                 targetEmail: targetUser.email,
                 targetName: targetUser.name
             });
-        }
-
-        // Security Helper: SHA-256 Hashing
-        async function hashPassword(password) {
-            const msgBuffer = new TextEncoder().encode(password);
-            const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
         }
 
         let allUsers = [];
@@ -391,7 +383,7 @@
                     workflowBtn = `<button class="btn btn-ghost btn-sm btn-icon" style="color:var(--warning);" onclick="deactivateUser('${u._id}')" title="Deactivate" aria-label="Deactivate">${lucideIcon("ban")}</button>`;
                 }
 
-                const resetBtn = `<button class="btn btn-ghost btn-sm btn-icon" onclick="resetPassword('${u._id}')" title="Reset to Default Password" aria-label="Reset to Default Password">${lucideIcon("key-round")}</button>`;
+                const resetBtn = `<button class="btn btn-ghost btn-sm btn-icon" onclick="resetPassword('${u._id}')" title="Send Password Reset Email" aria-label="Send Password Reset Email">${lucideIcon("key-round")}</button>`;
                 const unlockBtn = hasLoginIssue
                     ? `<button class="btn btn-ghost btn-sm btn-icon text-success" onclick="clearLoginIssues('${u._id}')" title="Clear failed logins and unlock" aria-label="Clear failed logins and unlock">${lucideIcon("check")}</button>`
                     : "";
@@ -511,34 +503,27 @@
             }
         };
 
-        // Action: Reset Password
+        // Firebase sends a recovery link; the account owner chooses the new password.
         window.resetPassword = async (id) => {
             const u = allUsers.find(x => x._id === id);
-            if (!u || !u.teacherId) {
-                showToast("Cannot reset password without Teacher ID.", "error");
+            if (!u || !u.email?.trim()) {
+                showToast("Cannot send a password reset email without an email address.", "error");
                 return;
             }
 
-            // TYYYY-XXX -> TYYXXX
-            const pPart = u.teacherId.substring(1).replace("-", ""); 
-            const defaultPassword = "T" + pPart.substring(2, 4) + pPart.substring(4);
-
-            const ok = await showConfirm(`Reset password for <strong>${u.name}</strong> to default?<br/><br/>New Password: <code>${defaultPassword}</code>`, "Reset Password", "Reset", true);
+            const email = u.email.trim();
+            const escapedEmail = email.replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+            const ok = await showConfirm(`Send a password reset link to <strong>${escapedEmail}</strong>? The account owner must open the email to choose a new password. This does not unlock or activate the account.`, "Send Password Reset Email", "Send Email", false);
             if (!ok) return;
 
             try {
-                const passHash = await hashPassword(defaultPassword);
-                await updateDoc(doc(db, "users", id), {
-                    passwordHash: passHash,
-                    needsPasswordChange: true, // Internal flag
-                    failedLoginAttempts: 0,
-                    lockedUntil: null,
-                    updatedAt: serverTimestamp()
+                await sendPasswordResetEmail(auth, email);
+                showToast("Password reset requested. If an eligible account exists, Firebase will send a reset link. The password has not changed yet.", "success");
+                await logAdminAction("REQUEST_PASSWORD_RESET_EMAIL", u).catch(() => {
+                    showToast("Reset request accepted, but its audit entry could not be recorded.", "warning");
                 });
-                showToast(`Password reset successfully for ${u.name}.`, "success");
-                logAdminAction("RESET_PASSWORD", u);
             } catch (err) {
-                showToast("Action failed: " + err.message, "error");
+                showToast("Password reset email request failed: " + err.message, "error");
             }
         };
 
@@ -699,7 +684,6 @@
                     userData.email = email;
                     userData.role = "teacher";
                     userData.createdAt = serverTimestamp();
-                    userData.passwordHash = await hashPassword(password);
                     await setDoc(doc(db, "users", res.user.uid), userData);
 
                     showToast("Account created successfully. User notified to log in with Teacher ID.", "success");
