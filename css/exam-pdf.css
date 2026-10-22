@@ -1,0 +1,15 @@
+/* Keep the existing review controls reachable when global topbar actions collapse. */
+.exam-pdf-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.exam-pdf-actions label { font-size: 14px; font-weight: 600; }
+.exam-pdf-actions select { font: inherit; padding: 8px; color: var(--text-primary); background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.exam-pdf-status { margin: 0 0 16px; overflow-wrap: anywhere; font-size: 14px; color: var(--text-primary); }
+.exam-pdf-status:empty { display: none; }
+.exam-pdf-actions :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 900px) {
+    .topbar:has(.exam-pdf-actions) { height: auto; min-height: var(--topbar-h); flex-wrap: wrap; gap: 12px; padding-top: 12px; padding-bottom: 12px; }
+    .topbar .exam-pdf-actions { display: flex; width: 100%; }
+    .exam-header-card { flex-wrap: wrap; gap: 12px; }
+    .exam-header-card > div { min-width: 0; }
+    .exam-header-card .flex { flex-wrap: wrap; }
+    .exam-header-card h2, .question-content, .option-box { overflow-wrap: anywhere; min-width: 0; }
+}

@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PBEC — View Exam</title>
     <link rel="stylesheet" href="../css/style.css" />
+    <link rel="stylesheet" href="../css/exam-pdf.css" />
     <style>
         .exam-header-card {
             background: var(--bg-card);
@@ -221,13 +222,16 @@
                     <div class="topbar-title">View Full Exam</div>
                     <div class="topbar-subtitle" id="exam-subtitle-top">Review all questions</div>
                 </div>
-                <div class="topbar-actions">
-                    <button class="btn btn-secondary" id="btn-print-exam">🖨️ Print Exam</button>
+                <div class="topbar-actions exam-pdf-actions">
+                    <label for="exam-set">Question set</label>
+                    <select id="exam-set" disabled><option value="A">Set A</option><option value="B">Set B</option></select>
+                    <button class="btn btn-secondary" id="btn-download-pdf" aria-describedby="pdf-export-status" disabled>Download exam PDF</button>
                     <a href="exams.html" class="btn btn-ghost">Back to List</a>
                 </div>
             </header>
 
             <main class="page-content">
+                <p id="pdf-export-status" class="exam-pdf-status" role="status" aria-live="polite"></p>
                 <div id="exam-loading" class="flex-center" style="padding:100px;">
                     <div class="spinner"></div>
                 </div>
@@ -277,7 +281,8 @@
         import { renderSidebar } from "../js/sidebar.js";
         import { initSidebar, showToast, formatDateTime } from "../js/ui.js";
         import { db } from "../js/firebase-config.js";
-        import { logActivity } from "../js/audit.js";
+        import { examBankIds, examQuestionIds } from "../js/exam-data.js";
+        import { bindExamPdfControls } from "../js/exam-pdf.js";
         import {
             collection, getDoc, getDocs, doc, query, where
         } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -292,14 +297,6 @@
         document.getElementById("user-email-display").textContent = user.name || user.email;
         document.getElementById("user-avatar").textContent = (user.name || user.email)[0].toUpperCase();
         document.getElementById("logout-btn").addEventListener("click", logout);
-        document.getElementById("btn-print-exam").addEventListener("click", () => {
-            logActivity(user, "PRINT_EXAM", "Opened the exam print dialog", {
-                operation: "READ",
-                entityType: "exam",
-                entityId: examId
-            });
-            window.print();
-        });
         initSidebar();
 
         const urlParams = new URLSearchParams(window.location.search);
@@ -329,7 +326,23 @@
         let currentPage = 1;
         const qPerPage = 10;
         let allQIds = [];
-        let globalQMap = {};
+        let loadedExam = null;
+        let loadedQuestions = [];
+        let orderedQuestions = [];
+        let exportSubject = "";
+        const pdfControls = bindExamPdfControls({
+            getExam: () => loadedExam,
+            getQuestions: () => loadedQuestions,
+            getSubject: () => exportSubject,
+            onSetChange: (set, questions) => {
+                allQIds = examQuestionIds(loadedExam, set);
+                orderedQuestions = questions;
+                currentPage = 1;
+                document.getElementById("view-count").textContent = `${allQIds.length} Questions · Set ${set}`;
+                renderQuestions();
+                updatePaginationControls();
+            }
+        });
 
         function escapeHtml(value) {
             return String(value ?? "")
@@ -389,12 +402,14 @@
                 }
 
                 const inferredSubject = getInferredSubject(examData);
+                loadedExam = examData;
+                exportSubject = inferredSubject || "";
                 document.getElementById("view-exam-title").textContent = examData.examName || "Unnamed Exam";
                 document.getElementById("view-subject").textContent = inferredSubject || "Subject Not Specified";
                 document.getElementById("print-header-title").textContent = inferredSubject || examData.examName || "Unnamed Exam";
                 
                 // Handle different question ID field names
-                allQIds = examData.questionIds || examData.setAQuestionIds || [];
+                allQIds = examQuestionIds(examData);
                 document.getElementById("view-count").textContent = `${allQIds.length} Questions`;
                 
                 // Handle different date formats
@@ -409,20 +424,19 @@
                 document.getElementById("view-date").textContent = "Created: " + dateStr;
 
                 // Fetch questions
-                if (allQIds.length === 0) {
+                if (allQIds.length === 0 && examQuestionIds(examData, "B").length === 0) {
                     document.getElementById("questions-list").innerHTML = '<div class="empty-state"><p>No questions in this exam.</p></div>';
                     document.getElementById("pagination-container").classList.add("hidden");
                     document.getElementById("exam-loading").classList.add("hidden");
                     document.getElementById("exam-content").classList.remove("hidden");
+                    pdfControls.refresh();
                     return;
                 }
 
-                globalQMap = {};
+                const questionDocs = new Map();
                 const canonicalBankId = SUBJECT_BANKS[inferredSubject];
-                const selectedBanks = examData.selectedQuestionBankIds || examData.sessionIds || [];
-                const bankIds = canonicalBankId && (selectedBanks.length === 0 || selectedBanks.includes(canonicalBankId))
-                    ? [canonicalBankId]
-                    : [];
+                const selectedBanks = examBankIds(examData);
+                const bankIds = selectedBanks.length ? selectedBanks : (canonicalBankId ? [canonicalBankId] : []);
                 for (const bankId of bankIds) {
                     const questions = collection(db, "question_banks", bankId, "questions");
                     const [defaults, owned] = await Promise.all([
@@ -430,36 +444,41 @@
                         getDocs(query(questions, where("uploadedByUid", "==", user.uid)))
                     ]);
                     [...defaults.docs, ...owned.docs].forEach((questionDoc) => {
-                        const data = questionDoc.data();
-                        globalQMap[questionDoc.id] = data;
-                        if (data.id != null) globalQMap[String(data.id)] = data;
+                        questionDocs.set(`${bankId}/${questionDoc.id}`, { ...questionDoc.data(), _id: questionDoc.id, _bankId: bankId });
                     });
                 }
 
-                renderQuestions();
+                loadedQuestions = [...questionDocs.values()];
+                pdfControls.refresh();
                 document.getElementById("exam-loading").classList.add("hidden");
                 document.getElementById("exam-content").classList.remove("hidden");
                 updatePaginationControls();
 
             } catch (err) {
                 console.error(err);
+                document.getElementById("exam-loading").classList.add("hidden");
+                document.getElementById("pdf-export-status").textContent = "Exam could not load. Reload the page to retry. " + err.message;
                 showToast("Error loading exam: " + err.message, "error");
             }
         }
 
         function renderQuestions() {
             const container = document.getElementById("questions-list");
+            if (!allQIds.length) {
+                container.innerHTML = '<div class="empty-state"><p>No questions in this set.</p></div>';
+                return;
+            }
             const start = (currentPage - 1) * qPerPage;
             const end = start + qPerPage;
 
             container.innerHTML = allQIds.map((qid, index) => {
-                const q = globalQMap[qid];
+                const q = orderedQuestions[index];
                 const isVisible = index >= start && index < end;
                 const qNum = index + 1;
                 
                 if (!q) return `<div class="question-item ${!isVisible ? 'hidden-on-screen' : ''}">
                     <div class="question-num">${qNum}.</div>
-                    <div class="question-content"><p class="text-muted">Question ${qNum} not found (ID: ${qid})</p></div>
+                    <div class="question-content"><p class="text-muted">Question ${qNum} could not be resolved (ID: ${escapeHtml(qid)}). PDF export is blocked.</p></div>
                 </div>`;
 
                 const options = [

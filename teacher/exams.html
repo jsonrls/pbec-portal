@@ -38,6 +38,7 @@
                     <div class="chip" data-subject="Professional EE">Professional EE</div>
                 </div>
 
+                <p id="exams-error" role="alert" class="hidden"></p>
                 <div id="exams-container">
                     <div class="empty-state" id="exams-empty">
                         <div class="empty-icon" data-lucide-icon="file-text"></div>
@@ -174,6 +175,7 @@
         import { lucideIcon } from "../js/lucide-icons.js";
         import { db } from "../js/firebase-config.js";
         import { logActivity } from "../js/audit.js";
+        import { timestampMillis, examSubject, isExamOwner, buildExamPayload } from "../js/exam-data.js";
         import {
             collection, addDoc, getDocs, deleteDoc, doc,
             serverTimestamp, query, orderBy, onSnapshot, updateDoc, where
@@ -191,6 +193,7 @@
 
         let allExams = [];
         let activeSubject = "all";
+        const emptyState = document.getElementById("exams-empty");
         const SUBJECT_BANKS = Object.freeze({
             "Mathematics": "default_mathematics",
             "ESAS": "default_esas",
@@ -210,9 +213,9 @@
                     getDocs(query(questions, where("uploadedByUid", "==", user.uid)))
                 ]);
                 return [...defaults.docs, ...owned.docs].map((questionDoc) => ({
+                    ...questionDoc.data(),
                     _id: questionDoc.id,
-                    _bankId: bankId,
-                    ...questionDoc.data()
+                    _bankId: bankId
                 }));
             }));
             const seen = new Set();
@@ -224,51 +227,33 @@
             });
         }
 
-        function getTeacherOwnerKeys() {
-            return [user.teacherId, user.email, user.uid].filter(Boolean).map(String);
-        }
-
         function isOwnedByCurrentTeacher(record = {}) {
-            const ownerKeys = getTeacherOwnerKeys();
-            return [
-                record.createdByEmail,
-                record.createdBy,
-                record.createdByUid,
-                record.uploadedByTeacherId,
-                record.uploadedByUid,
-                record.uploaderEmail
-            ].some(value => value && ownerKeys.includes(String(value)));
-        }
-
-        function hasOwnershipMetadata(record = {}) {
-            return Boolean(record.createdByEmail || record.createdBy || record.createdByUid || record.uploadedByTeacherId || record.uploadedByUid || record.uploaderEmail);
+            return isExamOwner(record, user);
         }
 
         // ─── Real-time exam list ───────────────────────────────────────
         const qExams = collection(db, "exams");
         onSnapshot(qExams, (snap) => {
             // Sort client-side to handle mixed types (Numbers vs Timestamps) and avoid index issues
+            document.getElementById("exams-error").classList.add("hidden");
             allExams = snap.docs.map(d => ({ ...d.data(), docId: d.id }))
-                .sort((a, b) => {
-                    const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.createdAt || 0);
-                    const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.createdAt || 0);
-                    return timeB - timeA;
-                });
+                .filter(e => e.deletedAt == null && (user.role === "admin" || isOwnedByCurrentTeacher(e)))
+                .sort((a, b) => timestampMillis(b.createdAt) - timestampMillis(a.createdAt));
             renderExams();
+        }, (error) => {
+            console.error("Exam list listener failed", { code: error.code });
+            const notice = document.getElementById("exams-error");
+            notice.textContent = "Exams could not be refreshed. Reload this page to retry.";
+            notice.classList.remove("hidden");
         });
 
         function getExamSubject(e) {
-            if (e.subject) return e.subject;
-            const name = (e.examName || "").toLowerCase();
-            if (name.includes("math")) return "Mathematics";
-            if (name.includes("esas")) return "ESAS";
-            if (name.includes("prof") || name.includes("ee")) return "Professional EE";
-            return "Other";
+            return examSubject(e);
         }
 
         function renderExams() {
             const container = document.getElementById("exams-container");
-            const empty = document.getElementById("exams-empty");
+            const empty = emptyState;
 
             console.log("Rendering exams. Total:", allExams.length);
 
@@ -280,7 +265,7 @@
 
                 // Ownership filter: support both web-created and Android-created exams.
                 if (user.role !== "admin") {
-                    return isOwnedByCurrentTeacher(e) || !hasOwnershipMetadata(e);
+                    return isOwnedByCurrentTeacher(e);
                 }
                 return true;
             });
@@ -411,27 +396,20 @@
                 const setA = shuffled.slice(0, Math.min(count, shuffled.length));
                 const setB = [...setA].sort(() => Math.random() - 0.5);
 
-                const createdRef = await addDoc(collection(db, "exams"), {
-                    examName: name, subject,
-                    setAQuestionIds: setA.map(q => q._id),
-                    setBQuestionIds: setB.map(q => q._id),
-                    sessionIds: sessionIds, // Track sessions for easier viewing later
-                    selectedQuestionBankIds: sessionIds,
-                    createdAt: serverTimestamp(),
-                    createdByEmail: user.email,
-                    uploadedByTeacherId: user.teacherId || "",
-                    uploadedByUid: user.uid || "",
-                    questionCount: setA.length
-                });
-
-                await logActivity(user, "CREATE_EXAM", `Generated exam: ${name}`, {
+                const payload = buildExamPayload({ examName: name, subject, setA, setB, bankIds: sessionIds, user });
+                const createdRef = await addDoc(collection(db, "exams"), payload);
+                allExams = [{ ...payload, docId: createdRef.id }, ...allExams.filter(e => e.docId !== createdRef.id)];
+                activeSubject = subject;
+                document.querySelectorAll(".chip[data-subject]").forEach(chip => chip.classList.toggle("active", chip.dataset.subject === subject));
+                renderExams();
+                showToast(`Exam "${name}" generated with ${setA.length} questions!`, "success");
+                document.getElementById("modal-generate").classList.add("hidden");
+                void logActivity(user, "CREATE_EXAM", `Generated exam: ${name}`, {
                     entityType: "exam",
                     entityId: createdRef.id,
                     subject,
                     questionCount: setA.length
-                });
-                showToast(`Exam "${name}" generated with ${setA.length} questions!`, "success");
-                document.getElementById("modal-generate").classList.add("hidden");
+                }).catch(error => console.warn("Exam saved; audit logging failed", { code: error.code }));
             } catch (err) {
                 showToast("Error generating exam: " + err.message, "error");
             } finally {

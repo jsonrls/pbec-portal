@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PBEC — Summary & Reports</title>
     <link rel="stylesheet" href="../css/style.css" />
+    <script src="../assets/vendor/jszip-3.10.1.min.js"></script>
 </head>
 
 <body>
@@ -20,16 +21,17 @@
                     <div class="topbar-subtitle">Record scores and view analytics</div>
                 </div>
                 <div class="topbar-actions">
-                    <button class="btn btn-secondary" id="btn-export" disabled>⬇ Export CSV</button>
+                    <button class="btn btn-secondary" id="btn-export" disabled>Export Excel class record</button>
                 </div>
             </header>
 
             <main class="page-content">
+                <div id="class-record-mount"></div>
 
                 <!-- Exam Selector -->
                 <div class="card mb-24" style="margin-bottom:24px;">
                     <div class="card-body"
-                        style="display:grid;grid-template-columns:1fr 1fr auto;gap:16px;align-items:flex-end;">
+                        style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:16px;align-items:flex-end;">
                         <div class="form-group" style="margin-bottom:0;">
                             <label>Select Subject</label>
                             <select class="form-control" id="sel-subject">
@@ -110,8 +112,8 @@
                                         <th>Student ID</th>
                                         <th>Year</th>
                                         <th>Section</th>
-                                        <th>Score (Set A)</th>
-                                        <th>Score (Set B)</th>
+                                        <th>Percentage (Set A)</th>
+                                        <th>Percentage (Set B)</th>
                                         <th>Status</th>
                                         <th>Actions</th>
                                     </tr>
@@ -144,9 +146,11 @@
         import { getSettings } from "../js/settings.js";
         import { db } from "../js/firebase-config.js";
         import { logActivity } from "../js/audit.js";
+        import { mountClassRecord, loadClassRecordData, canReadExam, timestamp, portalPercentages } from "../js/class-record.js";
+        import { escapeHtml, normalizeStudent, filterStudents, studentSnapshot } from "../js/student-actions.js";
         import {
             collection, getDocs, setDoc, doc,
-            serverTimestamp, query, orderBy, where, onSnapshot
+            serverTimestamp, query, where, onSnapshot, getDocsFromServer
         } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
         const user = await requireAuth("admin");
@@ -164,8 +168,21 @@
         let unsubResults = null;
 
         // ─── Load students ─────────────────────────────────────────────
-        const snap = await getDocs(query(collection(db, "students"), orderBy("name")));
-        allStudents = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+        try {
+            const snap = await getDocs(collection(db, "students"));
+            allStudents = snap.docs.map(d => normalizeStudent({ ...d.data(), _id: d.id }))
+                .sort((a, b) => a.name.localeCompare(b.name));
+        } catch (error) {
+            showToast("Students could not be loaded. Reload to retry.", "error");
+        }
+
+        mountClassRecord({
+            mount: document.getElementById("class-record-mount"),
+            exportButton: document.getElementById("btn-export"), user, logActivity, showToast,
+            templateUrl: "../assets/templates/preboard-record.xlsx",
+            loadExams: async () => (await getDocsFromServer(collection(db, "exams"))).docs.map(d => ({ ...d.data(), _id: d.id })),
+            loadRecords: selections => loadClassRecordData({ db, selections, user, api: { collection, query, where, getDocsFromServer } })
+        });
 
         // ─── Subject → Exam chain ──────────────────────────────────────
         const selSubject = document.getElementById("sel-subject");
@@ -192,7 +209,8 @@
                 return;
             }
             selExam.innerHTML = `<option value="">— Choose an exam —</option>` +
-                examDocs.map(d => `<option value="${d.id}" data-name="${d.data().examName}">${d.data().examName}</option>`).join("");
+                examDocs.filter(d => d.data().deletedAt == null && !d.data().isArchived)
+                    .map(d => `<option value="${escapeHtml(d.id)}" data-name="${escapeHtml(d.data().examName || d.data().name || d.id)}">${escapeHtml(d.data().examName || d.data().name || d.id)}</option>`).join("");
             selExam.disabled = false;
         });
 
@@ -210,11 +228,11 @@
             try {
                 const examDoc = await getDocs(query(collection(db, "exams"), where("__name__", "==", examId)));
                 if (examDoc.empty) throw new Error("Exam not found.");
-                currentExam = { _id: examId, ...examDoc.docs[0].data() };
+                currentExam = { ...examDoc.docs[0].data(), _id: examId };
+                if (!canReadExam(currentExam, user)) throw new Error("This exam is outside your access.");
 
                 document.getElementById("table-exam-title").textContent = examName;
                 document.getElementById("analytics-section").classList.remove("hidden");
-                document.getElementById("btn-export").disabled = false;
 
                 // Subscribe to results for this exam
                 if (unsubResults) unsubResults();
@@ -222,9 +240,11 @@
                     query(collection(db, "examResults"), where("examId", "==", examId)),
                     (snap) => {
                         resultsMap = {};
-                        snap.forEach(d => { resultsMap[d.data().studentDocId] = d.data(); });
+                        snap.docs.sort((a, b) => timestamp(a.data().updatedAt) - timestamp(b.data().updatedAt) || a.id.localeCompare(b.id))
+                            .forEach(d => { if (d.data().studentDocId) resultsMap[d.data().studentDocId] = d.data(); });
                         renderScoreTable(allStudents);
-                    }
+                    },
+                    () => showToast("Exam results could not be loaded. Reload to retry.", "error")
                 );
             } catch (err) {
                 showToast("Error loading exam: " + err.message, "error");
@@ -236,15 +256,18 @@
         // ─── Render score table ────────────────────────────────────────
         function renderScoreTable(students) {
             const search = document.getElementById("search-students")?.value?.toLowerCase() || "";
-            const filtered = students.filter(s =>
-                !search || s.name?.toLowerCase().includes(search) || s.studentId?.toLowerCase().includes(search)
-            );
+            const historical = Object.entries(resultsMap).filter(([id]) => !students.some(student => student._id === id))
+                .map(([id, result]) => normalizeStudent({ ...result.studentSnapshot, _id: id,
+                    name: result.studentSnapshot?.name || result.studentName || `Former student (${id})`,
+                    studentId: result.studentSnapshot?.studentId || result.studentId || "", rosterDeleted: true }));
+            const filtered = filterStudents([...students, ...historical], search);
 
             const tbody = document.getElementById("scores-tbody");
             tbody.innerHTML = filtered.map(s => {
                 const r = resultsMap[s._id] || {};
-                const scoreA = r.scoreA ?? "";
-                const scoreB = r.scoreB ?? "";
+                const [percentA, percentB] = portalPercentages(r);
+                const scoreA = percentA ?? "";
+                const scoreB = percentB ?? "";
                 const best = Math.max(scoreA !== "" ? Number(scoreA) : 0, scoreB !== "" ? Number(scoreB) : 0);
                 const hasBoth = scoreA !== "" && scoreB !== "";
                 const passed = hasBoth && best >= PASSING_SCORE;
@@ -253,37 +276,35 @@
                     : `<span class="badge badge-gray">Pending</span>`;
 
                 return `
-        <tr id="row-${s._id}">
+        <tr>
           <td>
             <div style="display:flex;align-items:center;gap:8px;">
-              <div style="width:28px;height:28px;border-radius:50%;background:var(--accent-dim);color:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex-shrink:0;">${(s.name || "?")[0].toUpperCase()}</div>
-              <span class="fw-600">${s.name || "—"}</span>
+              <div style="width:28px;height:28px;border-radius:50%;background:var(--accent-dim);color:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex-shrink:0;">${escapeHtml((s.name || "?")[0].toUpperCase())}</div>
+              <span class="fw-600">${escapeHtml(s.name || "—")}${s.rosterDeleted ? " (removed from roster)" : ""}</span>
             </div>
           </td>
-          <td><span class="badge badge-gray">${s.studentId || "—"}</span></td>
-          <td>${s.yearLevel || "—"}</td>
-          <td>${s.section || "—"}</td>
+          <td><span class="badge badge-gray">${escapeHtml(s.studentId || "—")}</span></td>
+          <td>${escapeHtml(s.yearLevel || "—")}</td>
+          <td>${escapeHtml(s.section || "—")}</td>
           <td>
             <input
               type="number" min="0" max="100"
-              class="score-input" id="scoreA-${s._id}"
+              class="score-input" data-student="${escapeHtml(s._id)}" data-set="A" aria-label="Set A percentage"
               value="${scoreA}"
               placeholder="—"
-              onchange="saveScore('${s._id}', 'A', this.value)"
             />
           </td>
           <td>
             <input
               type="number" min="0" max="100"
-              class="score-input" id="scoreB-${s._id}"
+              class="score-input" data-student="${escapeHtml(s._id)}" data-set="B" aria-label="Set B percentage"
               value="${scoreB}"
               placeholder="—"
-              onchange="saveScore('${s._id}', 'B', this.value)"
             />
           </td>
           <td>${statusBadge}</td>
           <td>
-            <button class="btn btn-ghost btn-sm" onclick="clearScore('${s._id}')">🗑</button>
+            <button class="btn btn-ghost btn-sm" data-clear="${escapeHtml(s._id)}" aria-label="Clear percentages">🗑</button>
           </td>
         </tr>
       `;
@@ -293,6 +314,14 @@
         }
 
         // Search students in score table
+        document.getElementById("scores-tbody").addEventListener("change", event => {
+            const input = event.target.closest("input[data-student]");
+            if (input) window.saveScore(input.dataset.student, input.dataset.set, input.value);
+        });
+        document.getElementById("scores-tbody").addEventListener("click", event => {
+            const button = event.target.closest("button[data-clear]");
+            if (button) window.clearScore(button.dataset.clear);
+        });
         const doSearch = debounce(() => renderScoreTable(allStudents), 250);
         document.getElementById("search-students").addEventListener("input", doSearch);
 
@@ -303,13 +332,16 @@
             try {
                 const docId = `${currentExam._id}_${studentDocId}`;
                 const existing = resultsMap[studentDocId] || {};
+                const [existingA, existingB] = portalPercentages(existing);
                 await setDoc(doc(db, "examResults", docId), {
                     examId: currentExam._id,
                     examName: currentExam.examName,
                     subject: currentExam.subject,
                     studentDocId,
-                    scoreA: set === "A" ? value : (existing.scoreA ?? null),
-                    scoreB: set === "B" ? value : (existing.scoreB ?? null),
+                    studentSnapshot: studentSnapshot(allStudents.find(student => student._id === studentDocId) || existing.studentSnapshot || { name: `Former student (${studentDocId})` }),
+                    scoreType: "percentage",
+                    scoreA: set === "A" ? value : existingA,
+                    scoreB: set === "B" ? value : existingB,
                     updatedAt: serverTimestamp()
                 }, { merge: true });
                 await logActivity(user, "UPDATE_SCORE", `Updated Set ${set} score for a student in ${currentExam.examName}`, {
@@ -331,6 +363,8 @@
                 const docId = `${currentExam._id}_${studentDocId}`;
                 await setDoc(doc(db, "examResults", docId), {
                     examId: currentExam._id, studentDocId,
+                    studentSnapshot: studentSnapshot(allStudents.find(student => student._id === studentDocId) || resultsMap[studentDocId]?.studentSnapshot || { name: `Former student (${studentDocId})` }),
+                    scoreType: "percentage",
                     scoreA: null, scoreB: null, updatedAt: serverTimestamp()
                 }, { merge: true });
                 await logActivity(user, "CLEAR_SCORE", `Cleared student scores in ${currentExam.examName}`, {
@@ -350,8 +384,10 @@
         function updateAnalytics() {
             const scores = allStudents
                 .map(s => resultsMap[s._id])
-                .filter(r => r && (r.scoreA !== null || r.scoreB !== null))
-                .map(r => Math.max(r.scoreA ?? 0, r.scoreB ?? 0));
+                .filter(Boolean)
+                .map(r => portalPercentages(r).filter(value => value !== null))
+                .filter(values => values.length)
+                .map(values => Math.max(...values));
 
             const total = allStudents.length;
             const avg = scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : "—";
@@ -367,33 +403,6 @@
             document.getElementById("an-pass").textContent = rate;
         }
 
-        // ─── Export CSV ────────────────────────────────────────────────
-        document.getElementById("btn-export").addEventListener("click", () => {
-            if (!currentExam) return;
-            const rows = [["Name", "Student ID", "Year", "Section", "Set A Score", "Set B Score", "Best Score", "Status"]];
-            allStudents.forEach(s => {
-                const r = resultsMap[s._id] || {};
-                const a = r.scoreA ?? "";
-                const b = r.scoreB ?? "";
-                const best = (a !== "" || b !== "") ? Math.max(a !== "" ? +a : 0, b !== "" ? +b : 0) : "";
-                const status = (a !== "" && b !== "") ? (best >= PASSING_SCORE ? "PASSED" : "FAILED") : "Pending";
-                rows.push([s.name, s.studentId, s.yearLevel, s.section, a, b, best, status]);
-            });
-            const csv = rows.map(r => r.map(v => `"${v}"`).join(",")).join("\n");
-            const blob = new Blob([csv], { type: "text/csv" });
-            const a = Object.assign(document.createElement("a"), {
-                href: URL.createObjectURL(blob),
-                download: `${currentExam.examName.replace(/[^a-z0-9]/gi, "_")}_results.csv`
-            });
-            a.click();
-            logActivity(user, "EXPORT_RESULTS", `Exported results for ${currentExam.examName}`, {
-                operation: "READ",
-                entityType: "examResult",
-                entityId: currentExam._id,
-                studentCount: allStudents.length
-            });
-            showToast("Results exported!", "success");
-        });
     </script>
 </body>
 

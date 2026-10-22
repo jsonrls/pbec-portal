@@ -62,8 +62,8 @@
                                     <td colspan="7">
                                         <div class="empty-state">
                                             <div class="empty-icon">👥</div>
-                                            <h4>No students yet</h4>
-                                            <p>Click "Add Student" to get started</p>
+                                            <h4>Loading students…</h4>
+                                            <p>Please wait for the roster to load.</p>
                                         </div>
                                     </td>
                                 </tr>
@@ -170,13 +170,14 @@
     <script type="module">
         import { requireAuth, logout } from "../js/auth.js";
         import { renderSidebar } from "../js/sidebar.js";
-        import { initSidebar, showToast, showConfirm, setButtonLoading, formatDate, debounce } from "../js/ui.js";
+        import { initSidebar, showToast, setButtonLoading, formatDate, debounce } from "../js/ui.js";
+        import { escapeHtml, normalizeStudent, filterStudents, confirmStudentAction } from "../js/student-actions.js";
         import { lucideIcon } from "../js/lucide-icons.js";
         import { db } from "../js/firebase-config.js";
         import { logActivity } from "../js/audit.js";
         import {
-            collection, addDoc, getDocs, updateDoc, deleteDoc,
-            doc, serverTimestamp, query, orderBy, onSnapshot, writeBatch
+            collection, addDoc, getDocs, updateDoc,
+            doc, serverTimestamp, query, onSnapshot, writeBatch
         } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
         const user = await requireAuth("teacher");
@@ -188,23 +189,24 @@
 
         let allStudents = [];
         let editingId = null;
+        const pendingActions = new Set();
 
         // ─── Real-time listener ───────────────────────────────────────
-        const q = query(collection(db, "students"), orderBy("createdAt", "desc"));
+        const q = collection(db, "students");
         onSnapshot(q, (snap) => {
-            allStudents = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+            allStudents = snap.docs.map(d => normalizeStudent({ ...d.data(), _id: d.id }))
+                .sort((a, b) => a.name.localeCompare(b.name) || a._id.localeCompare(b._id));
             renderTable(allStudents);
+        }, (err) => {
+            document.getElementById("student-count").textContent = "Unable to load students";
+            document.getElementById("students-tbody").innerHTML = '<tr><td colspan="7">Students could not be loaded. Reload to retry.</td></tr>';
+            showToast("Error loading students: " + escapeHtml(err.message), "error");
         });
 
         function renderTable(students) {
             const searchVal = document.getElementById("search-input").value.toLowerCase();
             const yearVal = document.getElementById("filter-year").value;
-            const filtered = students.filter(s => {
-                if (s.isArchived) return false;
-                const matchSearch = !searchVal || s.name?.toLowerCase().includes(searchVal) || s.studentId?.toLowerCase().includes(searchVal);
-                const matchYear = !yearVal || s.yearLevel === yearVal;
-                return matchSearch && matchYear;
-            });
+            const filtered = filterStudents(students, searchVal, yearVal, true);
 
             document.getElementById("student-count").textContent = `${filtered.length} student${filtered.length !== 1 ? "s" : ""}`;
             const tbody = document.getElementById("students-tbody");
@@ -225,23 +227,23 @@
         <td>
           <div class="flex gap-8" style="align-items:center;">
             <div style="width:32px;height:32px;border-radius:50%;background:var(--accent-dim);color:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0;">
-              ${(s.name || "?")[0].toUpperCase()}
+              ${escapeHtml((s.name || "?")[0].toUpperCase())}
             </div>
             <div>
-              <div class="fw-600">${s.name || "—"}</div>
-              ${s.email ? `<div class="text-xs text-muted">${s.email}</div>` : ""}
+              <div class="fw-600">${escapeHtml(s.name || "—")}</div>
+              ${s.email ? `<div class="text-xs text-muted">${escapeHtml(s.email)}</div>` : ""}
             </div>
           </div>
         </td>
-        <td><span class="badge badge-gray">${s.studentId || "—"}</span></td>
-        <td class="text-sm">${s.program ? s.program.replace("Bachelor of Science in ", "BS ") : "—"}</td>
-        <td><span class="badge badge-teal">${s.yearLevel || "—"}</span></td>
-        <td>${s.section || "—"}</td>
+        <td><span class="badge badge-gray">${escapeHtml(s.studentId || "—")}</span></td>
+        <td class="text-sm">${escapeHtml(s.program ? s.program.replace("Bachelor of Science in ", "BS ") : "—")}</td>
+        <td><span class="badge badge-teal">${escapeHtml(s.yearLevel || "—")}</span></td>
+        <td>${escapeHtml(s.section || "—")}</td>
         <td class="text-muted text-sm">${formatDate(s.createdAt)}</td>
         <td>
           <div class="td-actions">
-            <button class="btn btn-ghost btn-icon btn-sm" onclick="editStudent('${s._id}')" title="Edit" aria-label="Edit">${lucideIcon("pencil")}</button>
-            <button class="btn btn-danger btn-icon btn-sm" onclick="archiveStudent('${s._id}', '${(s.name || "this student").replace(/'/g, "\\'")}')" title="Archive" aria-label="Archive">${lucideIcon("trash-2")}</button>
+            <button class="btn btn-ghost btn-icon btn-sm" data-action="edit" data-id="${escapeHtml(s._id)}" title="Edit" aria-label="Edit">${lucideIcon("pencil")}</button>
+            <button class="btn btn-danger btn-icon btn-sm" data-action="archive" data-id="${escapeHtml(s._id)}" ${pendingActions.has(s._id) ? "disabled" : ""} title="Archive" aria-label="Archive">${lucideIcon("trash-2")}</button>
           </div>
         </td>
       </tr>
@@ -249,6 +251,13 @@
         }
 
         // Search & filter
+        document.getElementById("students-tbody").addEventListener("click", event => {
+            const button = event.target.closest("button[data-action]");
+            if (!button || button.disabled) return;
+            const id = button.dataset.id;
+            if (button.dataset.action === "edit") window.editStudent(id);
+            else window.archiveStudent(id);
+        });
         const doFilter = debounce(() => renderTable(allStudents), 250);
         document.getElementById("search-input").addEventListener("input", doFilter);
         document.getElementById("filter-year").addEventListener("change", doFilter);
@@ -326,17 +335,23 @@
             if (s) openModal(s);
         };
 
-        window.archiveStudent = async (id, name) => {
-            const ok = await showConfirm(`Archive <strong>${name}</strong>? They will be hidden from this list but kept in the system.`, "Archive Student", "Archive", false);
-            if (!ok) return;
+        window.archiveStudent = async (id) => {
+            const student = allStudents.find(item => item._id === id);
+            if (!student || pendingActions.has(id)) return;
+            pendingActions.add(id);
+            renderTable(allStudents);
             try {
+                if (!await confirmStudentAction(student, "archive")) return;
                 await updateDoc(doc(db, "students", id), { isArchived: true, updatedAt: serverTimestamp() });
-                await logActivity(user, "ARCHIVE_STUDENT", `Archived student: ${name}`, {
+                await logActivity(user, "ARCHIVE_STUDENT", `Archived student: ${student.name}`, {
                     entityType: "student", entityId: id
                 });
                 showToast("Student archived.", "success");
             } catch (err) {
-                showToast("Error archiving student: " + err.message, "error");
+                showToast("Error archiving student: " + escapeHtml(err.message), "error");
+            } finally {
+                pendingActions.delete(id);
+                renderTable(allStudents);
             }
         };
         // ─── Bulk Import ──────────────────────────────────────────────

@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Class record fixture (mock data)</title>
+    <link rel="stylesheet" href="../css/style.css" />
+    <script src="../assets/vendor/jszip-3.10.1.min.js"></script>
+</head>
+<body class="loaded">
+    <main class="page-content" style="margin:auto;">
+        <h1>Class record fixture</h1>
+        <p>Local mock data. No Firebase connection or live deletion.</p>
+        <div id="class-record-mount"></div>
+        <button class="btn btn-primary" id="btn-export" disabled>Export Excel class record</button>
+        <button class="btn btn-danger" id="delete-fixture">Delete fixture student</button>
+        <p id="delete-status" role="status"></p>
+    </main>
+    <div id="toast-container"></div>
+    <script type="module">
+        import { mountClassRecord, RECORD_SUBJECTS } from '../js/class-record.js';
+        import { confirmStudentAction } from '../js/student-actions.js';
+        import { showToast } from '../js/ui.js';
+        const user = { role: 'teacher', uid: 'teacher-1', email: 'teacher@example.test', name: 'Fixture teacher' };
+        const exams = RECORD_SUBJECTS.map((subject, index) => ({ _id: `exam-${index}`, id: 100 + index,
+            subject, examName: `${subject} round 1`, uploadedByUid: user.uid }));
+        const students = [{ _id: 's-1', name: `O'Neil <Test> & Student`, studentId: '000001', section: 'EE-4A' },
+            { _id: 's-2', name: 'Zero student', studentId: '000002', isArchived: true },
+            { _id: 's-3', name: 'Missing subject', studentId: '000003' }];
+        const portalResults = students.flatMap((student, i) => exams.map((exam, j) => ({
+            _id: `${exam._id}_${student._id}`, examId: exam._id, studentDocId: student._id,
+            scoreA: i === 1 ? 0 : i === 2 && j === 1 ? null : 75, scoreB: null
+        })));
+        const scanResults = [{ _id: 'cluster-scan', studentId: '000001', studentName: students[0].name,
+            examId: 100, score: 40, total: 50, uploadedByUid: user.uid, clusterId: 7, clusterName: 'Round 7' }];
+        window.fixture = { failExams: false, failRecords: false, empty: false, deleteCount: 0, exportCount: 0 };
+        const deleteButton = document.getElementById('delete-fixture');
+        deleteButton.addEventListener('click', async () => {
+            if (deleteButton.disabled) return;
+            deleteButton.disabled = true;
+            try {
+                const confirmed = await confirmStudentAction(students[0]);
+                if (confirmed) window.fixture.deleteCount++;
+                document.getElementById('delete-status').textContent = confirmed ? 'Mock deletion confirmed.' : 'Deletion cancelled.';
+            } finally { deleteButton.disabled = false; }
+        });
+        await mountClassRecord({ mount: document.getElementById('class-record-mount'),
+            exportButton: document.getElementById('btn-export'), user, showToast,
+            templateUrl: '../assets/templates/preboard-record.xlsx',
+            logActivity: async () => { window.fixture.exportCount++; },
+            loadExams: async () => {
+                if (window.fixture.failExams) throw new Error('Fixture exam error');
+                return [...exams, { ...exams[0], _id: 'other-owner', uploadedByUid: 'teacher-2', createdByEmail: user.email }];
+            },
+            loadRecords: async () => {
+                if (window.fixture.failRecords) throw new Error('Fixture records error');
+                return { students, snapshots: [], portalResults: window.fixture.empty ? [] : portalResults,
+                    scanResults: window.fixture.empty ? [] : scanResults };
+            }
+        });
+        window.fixture.ready = true;
+    </script>
+</body>
+</html>
