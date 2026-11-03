@@ -87,13 +87,14 @@
                 <div class="drop-zone" id="import-dropzone">
                     <div class="drop-icon">📄</div>
                     <h4>Click to upload or drag and drop</h4>
-                    <p class="text-muted">.xlsx, .xls, or .csv (Headers: Name, Student ID, Program, Year, Section)</p>
+                    <p class="text-muted">.xlsx, .xls, or .csv (PreBoard record template, or headers: Name, Student ID, Program, Year, Section)</p>
                     <input type="file" id="inp-import-file" accept=".xlsx, .xls, .csv" class="hidden" />
                 </div>
                 <div id="import-preview" class="hidden mt-16 text-sm"
                     style="background:var(--bg-hover);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border);">
                     <span id="import-filename" class="fw-600"></span> (<span id="import-rowcount"></span> rows ready to
                     import)
+                    <div id="import-skipped" class="text-muted"></div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -172,12 +173,13 @@
         import { renderSidebar } from "../js/sidebar.js";
         import { initSidebar, showToast, setButtonLoading, formatDate, debounce } from "../js/ui.js";
         import { escapeHtml, normalizeStudent, filterStudents, confirmStudentAction } from "../js/student-actions.js";
+        import { parseRoster, workbookSheets, importRoster } from "../js/roster-import.js";
         import { lucideIcon } from "../js/lucide-icons.js";
         import { db } from "../js/firebase-config.js";
         import { logActivity } from "../js/audit.js";
         import {
             collection, addDoc, getDocs, updateDoc,
-            doc, serverTimestamp, query, onSnapshot, writeBatch
+            doc, serverTimestamp, query, onSnapshot, writeBatch, deleteField
         } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
         const user = await requireAuth("teacher");
@@ -375,6 +377,7 @@
             document.getElementById("import-preview").classList.add("hidden");
             document.getElementById("import-filename").textContent = "";
             document.getElementById("import-rowcount").textContent = "";
+            document.getElementById("import-skipped").innerHTML = "";
             document.getElementById("modal-import-btn").disabled = true;
         }
 
@@ -401,46 +404,21 @@
             const reader = new FileReader();
             reader.onload = (e) => {
                 try {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const firstSheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[firstSheetName];
-                    const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-
-                    if (json.length < 2) throw new Error("File is empty or missing headers.");
-
-                    // Assume row 1 is headers.
-                    const headers = json[0].map(h => String(h).toLowerCase().trim());
-                    const rows = json.slice(1).filter(row => row.length > 0 && row.some(cell => cell)); // Skip empty rows
-
-                    if (rows.length === 0) throw new Error("No data rows found.");
-
-                    // Map headers to field names
-                    const nameIdx = headers.findIndex(h => h.includes("name"));
-                    const idIdx = headers.findIndex(h => h.includes("id"));
-                    const progIdx = headers.findIndex(h => h.includes("program") || h.includes("course"));
-                    const yearIdx = headers.findIndex(h => h.includes("year"));
-                    const sectionIdx = headers.findIndex(h => h.includes("sect"));
-
-                    if (nameIdx === -1 || idIdx === -1) {
-                        throw new Error("Missing required columns. Must have 'Name' and 'Student ID' columns.");
+                    const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+                    const { students, skipped } = parseRoster(workbookSheets(XLSX, workbook));
+                    if (students.length === 0) {
+                        throw new Error("No students found. Use the PreBoard record template or a sheet with Name and Student ID columns.");
                     }
-
-                    importData = rows.map(row => ({
-                        name: String(row[nameIdx] || "").trim(),
-                        studentId: String(row[idIdx] || "").trim(),
-                        program: progIdx !== -1 ? String(row[progIdx] || "").trim() : "Bachelor of Science in Electrical Engineering",
-                        yearLevel: yearIdx !== -1 ? String(row[yearIdx] || "").trim() : "1st Year",
-                        section: sectionIdx !== -1 ? String(row[sectionIdx] || "").trim() : "",
-                        createdAt: serverTimestamp(),
-                        updatedAt: serverTimestamp()
-                    })).filter(r => r.name && r.studentId); // Final filter to ensure valid rows
+                    importData = students;
 
                     document.getElementById("import-preview").classList.remove("hidden");
                     document.getElementById("import-filename").textContent = file.name;
-                    document.getElementById("import-rowcount").textContent = importData.length;
-                    document.getElementById("modal-import-btn").disabled = importData.length === 0;
-
+                    document.getElementById("import-rowcount").textContent = students.length;
+                    document.getElementById("import-skipped").innerHTML = skipped.length
+                        ? `<div class="fw-600 mt-8">${skipped.length} row(s) will be skipped:</div><ul style="margin:4px 0 0 18px;">` +
+                            skipped.map(s => `<li>${escapeHtml(s.name)}: ${escapeHtml(s.reason)} (${escapeHtml(s.where)})</li>`).join("") + "</ul>"
+                        : "";
+                    document.getElementById("modal-import-btn").disabled = false;
                 } catch (err) {
                     showToast(err.message || "Failed to parse file.", "error");
                     resetImport();
@@ -456,26 +434,14 @@
             setButtonLoading(btn, true, `Importing ${importData.length} records…`);
 
             try {
-                // Batch writes limit to 500, but let's do chunks of 500 
-                const chunks = [];
-                for (let i = 0; i < importData.length; i += 500) {
-                    chunks.push(importData.slice(i, i + 500));
-                }
-
-                for (const chunk of chunks) {
-                    const batch = writeBatch(db);
-                    for (const student of chunk) {
-                        const newRef = doc(collection(db, "students"));
-                        batch.set(newRef, student);
-                    }
-                    await batch.commit();
-                }
-
-                await logActivity(user, "IMPORT_STUDENTS", `Imported ${importData.length} students`, {
-                    entityType: "student",
-                    count: importData.length
+                const { created, updated } = await importRoster({
+                    db, students: importData, uid: user.uid,
+                    api: { collection, doc, getDocs, writeBatch, serverTimestamp, deleteField }
                 });
-                showToast(`Successfully imported ${importData.length} students!`, "success");
+                await logActivity(user, "IMPORT_STUDENTS", `Imported ${importData.length} students${suffix}`, {
+                    entityType: "student", count: importData.length, created, updated
+                });
+                showToast(`Imported ${importData.length} students (${created} new, ${updated} updated).`, "success");
                 closeImportModal();
             } catch (err) {
                 console.error(err);
