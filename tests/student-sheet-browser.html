@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Student sheet fixture (mock data)</title>
+    <link rel="stylesheet" href="../css/style.css" />
+    <script src="../assets/vendor/jszip-3.10.1.min.js"></script>
+</head>
+<body class="loaded">
+    <div class="app-shell"><div class="main-content">
+    <header class="topbar"><div style="flex:1;"><div class="topbar-title">Students</div></div>
+        <div class="topbar-actions"><button class="btn btn-secondary" id="btn-import-students">Import CSV/Excel</button></div></header>
+    <main class="page-content xl-page">
+        <div id="student-sheet"></div>
+    </main>
+    </div></div>
+    <div id="toast-container"></div>
+    <script type="module">
+        // In-memory stand-in for the Firestore calls the sheet makes. No Firebase connection.
+        import { mountStudentSheet } from '../js/student-sheet.js';
+        import { showToast } from '../js/ui.js';
+        const user = { role: 'teacher', uid: 'teacher-1', email: 'teacher@example.test', name: 'Fixture teacher' };
+        const db = { students: new Map(), exams: new Map(), exam_clusters: new Map(), examResults: new Map(), scan_results: new Map() };
+        let seq = 0, listeners = [];
+        const stamp = () => ({ seconds: ++seq });
+        const put = (name, id, data) => db[name].set(id, data);
+        put('students', 'm1', { name: 'REALES, Jayson N.', studentId: 'S180047', block: 'A', email: 'j@example.test', gender: 'MALE', createdAt: stamp(), uploadedByUid: user.uid });
+        put('students', 'm2', { name: 'EBONES, JOHN REY', studentId: 'S180049', block: 'A', gender: 'MALE', createdAt: stamp(), uploadedByUid: user.uid });
+        put('students', 'f1', { name: 'AGRIPA, Cali Rose A.', studentId: 'S180048', block: 'A', email: 'c@example.test', gender: 'FEMALE', createdAt: stamp(), uploadedByUid: user.uid });
+        const subjects = ['Mathematics', 'ESAS', 'Professional EE'];
+        subjects.forEach((subject, i) => put('exams', `exam-${i}`, { id: 100 + i, subject, examName: `${subject} R1`, uploadedByUid: user.uid }));
+        put('exam_clusters', 'c7', { id: 7, name: 'Exam 1', schoolYear: '2026-2027', createdAt: 5, uploadedByUid: user.uid,
+            examIdsBySubject: { Mathematics: 100, ESAS: 101, 'Professional EE': 102 } });
+        [[80, 75, 90], [45, 60, 70]].forEach((scores, s) => scores.forEach((score, i) => put('scan_results', `scan-${s}-${i}`, {
+            studentId: ['S180047', 'S180048'][s], examId: 100 + i, subject: subjects[i], score, total: 100,
+            uploadedByUid: user.uid, clusterId: 7, scannedAt: 1000 })));
+
+        const snap = (name, filter) => ({ docs: [...db[name]].filter(([, data]) => !filter || filter(data))
+            .map(([id, data]) => ({ id, ref: { name, id }, data: () => structuredClone(data) })) });
+        const notify = () => listeners.forEach(listener => listener(snap('students')));
+        const DELETE = Symbol('delete');
+        const setPath = (target, path, value) => {
+            const parts = path.split('.'), last = parts.pop();
+            for (const part of parts) target = target[part] ??= {};
+            if (value === DELETE) delete target[last]; else target[last] = value;
+        };
+        const update = (ref, ...args) => {
+            const data = db[ref.name].get(ref.id);
+            if (typeof args[0] === 'string') for (let i = 0; i < args.length; i += 2) setPath(data, args[i], args[i + 1]);
+            else Object.assign(data, args[0]);
+            window.fixture.writes.push({ id: ref.id, args });
+        };
+        const api = {
+            collection: (_, name) => ({ name }), doc: (parent, name, id) => name === undefined ? { name: parent.name, id: `new-${++seq}` } : { name, id },
+            where: (field, op, value) => ({ field, value }), query: (collection, filter) => ({ ...collection, filter }),
+            onSnapshot: (collection, next) => { listeners.push(next); queueMicrotask(() => next(snap('students'))); },
+            updateDoc: async (ref, ...args) => { update(ref, ...args); notify(); },
+            writeBatch: () => { const ops = []; return { set: (ref, data) => ops.push(() => put(ref.name, ref.id, { ...data, createdAt: stamp() })),
+                update: (ref, ...args) => ops.push(() => update(ref, ...args)),
+                commit: async () => { ops.forEach(op => op()); window.fixture.batches++; notify(); } }; },
+            serverTimestamp: () => 'server-time', deleteField: () => DELETE,
+            getDocs: async request => snap(request.name, request.filter && (data => data[request.filter.field] === request.filter.value)),
+            getDocsFromServer: async request => request.name === 'users' ? { docs: [] } :
+                snap(request.name, request.filter && (data => [].concat(request.filter.value).includes(data[request.filter.field])))
+        };
+        window.fixture = { writes: [], batches: 0, removed: [], db };
+        mountStudentSheet({ mount: document.getElementById('student-sheet'), user, db: {}, api, showToast,
+            logActivity: async () => {}, removeLabel: 'Archive', removeIcon: '<svg class="lucide" viewBox="0 0 24 24"><path d="M3 6h18"></path></svg>',
+            removeStudent: async student => { window.fixture.removed.push(student._id); db.students.get(student._id).isArchived = true; notify(); },
+            templateUrl: '../assets/templates/preboard-record.xlsx' });
+        window.fixture.ready = true;
+    </script>
+</body>
+</html>

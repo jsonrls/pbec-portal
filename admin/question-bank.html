@@ -402,6 +402,7 @@
         import { renderSidebar } from "../js/sidebar.js";
         import { initSidebar, showToast, showConfirm, setButtonLoading } from "../js/ui.js";
         import { logActivity } from "../js/audit.js";
+        import { normalizeAnswerKey } from "../js/exam-data.js";
         import { db, storage } from "../js/firebase-config.js";
         import {
             collection,
@@ -878,7 +879,9 @@
             document.getElementById("question-form-option-b").value = existing?.optionB || "";
             document.getElementById("question-form-option-c").value = existing?.optionC || "";
             document.getElementById("question-form-option-d").value = existing?.optionD || "";
-            document.getElementById("question-form-answer").value = existing?.correctAnswer || "";
+            document.getElementById("question-form-answer").value = existing
+                ? normalizeAnswerKey(existing.correctAnswer, [existing.optionA, existing.optionB, existing.optionC, existing.optionD]) || ""
+                : "";
             subjectField.disabled = isEditMode;
             sessionField.disabled = isEditMode;
 
@@ -1393,15 +1396,16 @@
 
             const detectedSubjects = new Set();
             const questions = [];
+            let invalidAnswerRows = 0;
             const rows = json.slice(1).filter((row) => Array.isArray(row) && row.some((cell) => String(cell ?? "").trim() !== ""));
 
             rows.forEach((row, index) => {
                 const questionText = String(row[colMapping["question text"]] || "").trim();
                 if (!questionText) return;
 
-                const rawCorrect = String(row[colMapping["correct answer"]] || "").trim();
-                const correctAnswer = rawCorrect.toUpperCase().charAt(0);
-                if (!["A", "B", "C", "D"].includes(correctAnswer)) return;
+                // Store only A–D: the scanner cannot grade any other key.
+                const correctAnswer = normalizeAnswerKey(row[colMapping["correct answer"]], ["option a", "option b", "option c", "option d"].map((column) => row[colMapping[column]]));
+                if (!correctAnswer) { invalidAnswerRows++; return; }
 
                 const rowSubject = colMapping.subject !== undefined ? String(row[colMapping.subject] || "").trim() : "";
                 const detectedSubject = resolveDetectedSubject(selectedSubject, rowSubject, sheetName) || selectedSubject;
@@ -1445,6 +1449,7 @@
                     sheetName,
                     detectedSubjects: [...detectedSubjects],
                     parsedQuestionCount: questions.length,
+                    invalidAnswerRows,
                     skippedReason: questions.length ? null : "No valid question rows"
                 }
             };
@@ -1702,7 +1707,9 @@
                             throw new Error("No valid questions found to process.");
                         }
 
-                        const sheetSummary = `${validSheetCount} sheets${skippedSheetCount ? `, ${skippedSheetCount} skipped` : ""}`;
+                        const badAnswerRows = sheetResults.reduce((sum, result) => sum + (result.metadata.invalidAnswerRows || 0), 0);
+                        const sheetSummary = `${validSheetCount} sheets${skippedSheetCount ? `, ${skippedSheetCount} skipped` : ""}` +
+                            (badAnswerRows ? `, ${badAnswerRows} row${badAnswerRows === 1 ? "" : "s"} skipped: correct answer is not A–D` : "");
                         const duplicateMessage = totalDuplicates ? `${totalDuplicates} duplicates skipped.` : "";
 
                         progressFill.style.width = "100%";

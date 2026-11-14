@@ -20,6 +20,7 @@ export function renderSidebar(activePage, user) {
 
   const adminContentNav = [
     { id: "dashboard", icon: icons.dashboard, label: "Overview", href: "dashboard.html" },
+    { id: "students", icon: icons.students, label: "Students", href: "students.html" },
     { id: "question-bank", icon: icons["question-bank"], label: "Question Bank", href: "question-bank.html" }
   ];
 

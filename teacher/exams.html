@@ -175,7 +175,7 @@
         import { lucideIcon } from "../js/lucide-icons.js";
         import { db } from "../js/firebase-config.js";
         import { logActivity } from "../js/audit.js";
-        import { timestampMillis, examSubject, isExamOwner, buildExamPayload } from "../js/exam-data.js";
+        import { timestampMillis, examSubject, isExamOwner, buildExamPayload, hasAnswerKey } from "../js/exam-data.js";
         import {
             collection, addDoc, getDocs, deleteDoc, doc,
             serverTimestamp, query, orderBy, onSnapshot, updateDoc, where
@@ -388,9 +388,15 @@
             setButtonLoading(btn, true, "Generating…");
 
             try {
-                const pool = await getVisibleQuestions(subject, sessionIds);
+                let pool = await getVisibleQuestions(subject, sessionIds);
 
-                if (!pool.length) throw new Error("No questions found in selected sessions.");
+                // Questions without an A–D key cannot be scored; leave them out of every new exam.
+                const keyed = pool.filter(hasAnswerKey);
+                const unkeyedCount = pool.length - keyed.length;
+                pool = keyed;
+                if (!pool.length) throw new Error(unkeyedCount
+                    ? "None of the questions in the selected sessions has an A–D answer key. Fix them in the Question Bank."
+                    : "No questions found in selected sessions.");
 
                 const shuffled = shuffle ? [...pool].sort(() => Math.random() - 0.5) : pool;
                 const setA = shuffled.slice(0, Math.min(count, shuffled.length));
@@ -402,7 +408,8 @@
                 activeSubject = subject;
                 document.querySelectorAll(".chip[data-subject]").forEach(chip => chip.classList.toggle("active", chip.dataset.subject === subject));
                 renderExams();
-                showToast(`Exam "${name}" generated with ${setA.length} questions!`, "success");
+                showToast(`Exam "${name}" generated with ${setA.length} questions!` +
+                    (unkeyedCount ? ` ${unkeyedCount} question${unkeyedCount === 1 ? "" : "s"} without an answer key left out.` : ""), "success");
                 document.getElementById("modal-generate").classList.add("hidden");
                 void logActivity(user, "CREATE_EXAM", `Generated exam: ${name}`, {
                     entityType: "exam",

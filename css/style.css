@@ -897,6 +897,14 @@ table tbody td {
   animation: slideUp 0.25s ease;
 }
 
+/* Native <dialog> centres itself with margin:auto, which the global reset removes. */
+dialog.modal {
+  margin: auto;
+}
+dialog.modal::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+}
+
 .modal-lg {
   max-width: 720px;
 }
@@ -2625,4 +2633,72 @@ table tbody tr:hover {
     grid-column: 2;
   }
 
+}
+
+/* ─── Students page: PreBoard Examination Record workbook ───────────────── */
+.xl-page { display: flex; flex-direction: column; }
+/* Let the wide sheet scroll inside its frame instead of widening the whole page. */
+.main-content:has(.xl-page) { min-width: 0; }
+.xl-book { --xl-grid: #d4d4d4; --xl-line: #8c8c8c; --xl-select: #217346;
+  display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.xl-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.xl-toolbar.hidden { display: none; }
+.xl-cluster { width: auto; min-width: 220px; max-width: 100%; }
+.xl-status { margin: 0; min-height: 1.4em; color: var(--text-secondary); }
+.xl-status.xl-error { color: var(--danger); font-weight: 600; }
+.xl-scroll { overflow: auto; max-height: calc(100vh - 230px); min-height: 320px; background: #fff;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-sm) var(--radius-sm) 0 0; }
+.xl-grid { border-collapse: separate; border-spacing: 0; table-layout: fixed; width: max-content;
+  font-family: Calibri, Carlito, "Segoe UI", Arial, sans-serif; font-size: 15px; color: #000; }
+.xl-grid th, .xl-grid td { height: 24px; padding: 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  border-right: 1px solid var(--xl-grid); border-bottom: 1px solid var(--xl-grid); text-align: center; }
+.xl-grid thead th { position: sticky; top: 0; z-index: 2; background: #f3f3f3; color: #444; font-weight: 400; font-size: 13px; }
+.xl-grid .xl-rn { position: sticky; left: 0; z-index: 1; background: #f3f3f3; color: #444; font-weight: 400; font-size: 13px; }
+/* Hidden rows above: a heavier rule on the row header, as spreadsheet apps draw it. */
+.xl-grid .xl-rn.xl-gap { border-top: 3px double #9a9a9a; }
+.xl-grid thead .xl-corner { left: 0; z-index: 3; }
+/* Row controls stay pinned at the right edge however far the wide template scrolls. */
+.xl-grid .xl-act, .xl-grid .xl-act-head { position: sticky; right: 0; z-index: 1; border-right: 0; border-left: 1px solid var(--xl-grid);
+  border-bottom-color: transparent; background: #fff; text-align: left; padding: 0 4px; }
+.xl-grid thead .xl-act-head { z-index: 3; background: #f3f3f3; }
+.xl-grid tr.xl-tall > td, .xl-grid tr.xl-tall > th { height: 46px; }
+.xl-title { font-family: Corben, Georgia, serif; font-size: 24px; color: #0070c0; }
+.xl-head { font-weight: 700; border-bottom: 1px solid var(--xl-line) !important; }
+.xl-box { border: 1px solid var(--xl-line) !important; }
+.xl-band { background: #83caeb; font-weight: 700; border: 1px solid var(--xl-line) !important; }
+.xl-meta { text-align: left !important; }
+.xl-sec { background: #f2f2f2; border-top: 1px solid var(--xl-line); border-bottom: 1px solid var(--xl-line) !important; }
+.xl-num { font-size: 14px; }
+.xl-left { text-align: left !important; }
+.xl-right { text-align: right !important; }
+.xl-bold { font-weight: 700; }
+.xl-rhead { white-space: normal !important; font-size: 13px; line-height: 1.15; border-bottom: 1px solid var(--xl-line) !important; }
+.xl-green { background: #d9f2d0; }
+.xl-sep { background: #aeaeae; font-weight: 600; }
+.xl-failed { background: #ffc7ce; color: #9c0006; }
+.xl-grid td.xl-cell { padding: 0; position: relative; }
+.xl-in { display: block; width: 100%; height: 100%; min-height: 23px; border: 0; padding: 0 4px; margin: 0;
+  background: transparent; font: inherit; color: inherit; text-align: inherit; }
+.xl-in:focus { outline: 2px solid var(--xl-select); outline-offset: -2px; background: #fff; position: relative; z-index: 1; }
+.xl-score .xl-in { text-align: right; }
+.xl-override::after { content: ""; position: absolute; top: 0; right: 0; border-style: solid; border-width: 0 7px 7px 0;
+  border-color: transparent #c00000 transparent transparent; pointer-events: none; }
+.xl-override .xl-in { font-style: italic; }
+.xl-draft td:not(.xl-act) { background: #fff8e1; }
+.xl-bad td:not(.xl-act) { background: #fde8e8; }
+.xl-archived td:not(.xl-act) { color: #8a8a8a; font-style: italic; }
+.xl-gender { height: 22px; padding: 0 2px; font-size: 12px; border: 1px solid var(--border-strong); border-radius: 4px; background: #fff; }
+.xl-btn { height: 22px; min-width: 24px; margin-left: 4px; padding: 0 4px; border: 1px solid var(--border-strong);
+  border-radius: 4px; background: #fff; color: var(--text-secondary); cursor: pointer; line-height: 1; vertical-align: middle; }
+.xl-btn .lucide { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.xl-btn:hover { background: var(--bg-hover); }
+.xl-btn.xl-danger:hover { color: var(--danger); border-color: var(--danger); }
+.xl-btn:disabled { opacity: .5; cursor: wait; }
+.xl-tabs { display: flex; gap: 2px; margin-top: -8px; padding: 0 0 0 44px; border-top: 1px solid var(--border-strong); overflow-x: auto; }
+.xl-tabs [role="tab"] { padding: 6px 16px; border: 1px solid var(--border-strong); border-top: 0; border-radius: 0 0 6px 6px;
+  background: #f3f3f3; color: #444; font: 600 13px Calibri, Carlito, "Segoe UI", Arial, sans-serif; cursor: pointer; }
+.xl-tabs [role="tab"][aria-selected="true"] { background: #fff; color: var(--xl-select); border-bottom: 2px solid var(--xl-select); }
+@media (max-width: 768px) {
+  .xl-scroll { max-height: calc(100vh - 260px); }
+  .xl-tabs { padding-left: 0; }
 }

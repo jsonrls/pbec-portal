@@ -14,10 +14,11 @@ test('roster names, numeric IDs, zero IDs, archive filtering and escaping', () =
     assert.equal(studentActions.escapeHtml(`O'Neil <img "x"> &`), 'O&#39;Neil &lt;img &quot;x&quot;&gt; &amp;');
 });
 
-test('raw grading combines mobile and portal, preserves zero and missing', () => {
+test('grading transmutes raw scores like the record template, preserves zero and missing', () => {
     const { rows } = records.buildClassRecord(fixture());
     assert.deepEqual(rows[0].percentages, [80, 75, 75]);
-    assert.equal(rows[0].rating, 76.25);
+    assert.deepEqual(rows[0].transmuted, [88, 85, 85]);
+    assert.equal(rows[0].rating, 85.75);
     assert.equal(rows[0].remark, 'PASSED');
     assert.deepEqual(rows[1].percentages, [75, null, 75]);
     assert.equal(rows[1].rating, null);
@@ -34,6 +35,12 @@ test('all subjects >=50 and rating >=70, invalid scores and empty values', () =>
     assert.equal(records.buildClassRecord(data).rows[0].remark, 'FAILED');
     data.portalResults.forEach((result, index) => result.scoreA = [50, 50, 100][index]);
     assert.equal(records.buildClassRecord(data).rows[0].remark, 'PASSED');
+    // All raw 50 transmute to exactly 70: the boundary passes despite float weights.
+    data.portalResults.forEach(result => result.scoreA = 50);
+    assert.equal(records.buildClassRecord(data).rows[0].rating, 70);
+    assert.equal(records.buildClassRecord(data).rows[0].remark, 'PASSED');
+    assert.equal(records.transmute(null), null);
+    assert.equal(records.transmute(0), 40);
     for (const value of [null, '', ' ', undefined, NaN, Infinity, -1, 101, true]) assert.equal(records.percentage(value), null);
     assert.equal(records.percentage('0'), 0);
     assert.deepEqual(records.portalPercentages({ scoreA: 40, scoreB: 0, scoreType: 'raw', total: 50 }), [80, 0]);
@@ -70,6 +77,22 @@ test('owner and cluster isolation, numeric and document exam keys, trashed scans
     assert.equal(records.canReadExam({ uploadedByUid: 'teacher-2', createdByEmail: user.email, uploadedByTeacherId: user.teacherId }, user), false);
     assert.equal(records.matchesExam({ examId: 'exam-0', uploadedByUid: 'teacher-2', teacherEmail: user.email },
         { ...selections[0], createdByEmail: user.email }, selections, { ...user, role: 'admin' }), false);
+});
+
+test('per-cluster score overrides replace scans, add missing rows and keep the scanned value', () => {
+    const data = fixture(2);
+    data.scanResults = data.scanResults.map(record => ({ ...record, clusterId: 7 }));
+    data.portalResults = [];
+    data.students[0].scoreOverrides = { 7: { ESAS: 90 }, 8: { Mathematics: 10 } };
+    data.students[1].scoreOverrides = { 7: { Mathematics: 60, ESAS: '', 'Professional EE': 101 } };
+    const { rows } = records.buildClassRecord({ ...data, clusterId: 7 });
+    assert.deepEqual(rows[0].percentages, [80, 90, null]);
+    assert.equal(rows[0].subjects[1].source, 'override');
+    assert.equal(rows[0].subjects[0].source, 'scan');
+    assert.deepEqual(rows[1].percentages, [60, null, null]);
+    assert.equal(rows[1].subjects[0].scanned, null);
+    const plain = records.buildClassRecord({ ...data, clusterId: null }).rows;
+    assert.equal(plain.length, 0);
 });
 
 test('stable IDs keep namesakes separate and ambiguous student IDs exclude scans', () => {
@@ -109,37 +132,23 @@ test('actual teacher score writer exports against mobile UID-owned exams and saf
     assert.equal(records.matchesExam(legacy, selections[0], selections, { role: 'admin', uid: 'admin', email: 'admin@example.test' }), false);
 });
 
-test('actual teacher page searches names/numeric IDs and releases archive pending state', async () => {
+test('actual teacher page archives only after confirmation and mounts the record sheet', async () => {
     const html = await readFile(new URL('../teacher/students.html', import.meta.url), 'utf8');
-    const render = html.match(/function renderTable\(students\)[\s\S]*?(?=\n        \/\/ Search & filter)/)[0];
-    const archive = html.match(/window\.archiveStudent = async[\s\S]*?(?=\n        \/\/ ─── Bulk Import)/)[0];
-    const elements = Object.fromEntries(['search-input', 'filter-year', 'student-count', 'students-tbody']
-        .map(id => [id, { value: '', textContent: '', innerHTML: '' }]));
-    const students = [{ _id: 'numeric', name: 'Numeric Student', studentId: 123 }, { _id: 'named', name: 'Name Search', studentId: '0007' }].map(studentActions.normalizeStudent);
+    const archive = html.match(/async function archiveStudent\(student\)[\s\S]*?\n        }\n/)[0];
+    assert.match(html, /removeStudent: archiveStudent, removeLabel: "Archive"/);
     let confirm = false;
-    const writes = [], pendingActions = new Set();
-    const context = vm.createContext({ window: {}, document: { getElementById: id => elements[id] },
-        allStudents: students, pendingActions, user, db: {}, ...studentActions,
-        confirmStudentAction: async () => confirm, lucideIcon: () => '', formatDate: () => '',
+    const writes = [];
+    const context = vm.createContext({ user, db: {}, ...studentActions,
+        confirmStudentAction: async () => confirm,
         doc: (_, collection, id) => ({ collection, id }), serverTimestamp: () => 1000,
-        updateDoc: async (ref, payload) => { writes.push(payload); Object.assign(students.find(student => student._id === ref.id), payload); },
+        updateDoc: async (ref, payload) => writes.push({ ...payload, _id: ref.id }),
         logActivity: async () => {}, showToast: () => {} });
-    vm.runInContext(render + '\n' + archive, context);
-    elements['search-input'].value = 'Name Search';
-    context.renderTable(students);
-    assert.equal(elements['student-count'].textContent, '1 student');
-    assert.match(elements['students-tbody'].innerHTML, /Name Search/);
-    elements['search-input'].value = '123';
-    context.renderTable(students);
-    assert.match(elements['students-tbody'].innerHTML, /Numeric Student/);
-    await context.window.archiveStudent('numeric');
+    vm.runInContext(archive + '\nthis.archiveStudent = archiveStudent;', context);
+    await context.archiveStudent({ _id: 'numeric', name: 'Numeric Student' });
     assert.equal(writes.length, 0);
-    assert.equal(pendingActions.size, 0);
     confirm = true;
-    await context.window.archiveStudent('numeric');
-    assert.equal(writes[0].isArchived, true);
-    assert.equal(elements['student-count'].textContent, '0 students');
-    assert.equal(pendingActions.size, 0);
+    await context.archiveStudent({ _id: 'numeric', name: 'Numeric Student' });
+    assert.deepEqual(writes, [{ isArchived: true, updatedAt: 1000, _id: 'numeric' }]);
 });
 
 test('admin resolves selected UID owner profiles so legacy portal grades match teacher exports', async () => {
@@ -222,7 +231,7 @@ test('delete fails safely above batch limit or on read/commit failure', async ()
     await assert.rejects(studentActions.deleteStudentPreservingResults({ db: {}, api: failed.api, student: { _id: 's' } }), /offline/);
 });
 
-test('XLSX retains template styles/widths/headers, dynamic rows and raw formulas with correct caches', async () => {
+test('XLSX retains template styles/widths/headers, dynamic rows and template formulas with correct caches', async () => {
     const template = await readFile(new URL('../assets/templates/preboard-record.xlsx', import.meta.url));
     const rows = records.buildClassRecord(fixture(125)).rows;
     const bytes = await records.createClassWorkbook({ template, rows, selections, JSZip });
@@ -237,7 +246,7 @@ test('XLSX retains template styles/widths/headers, dynamic rows and raw formulas
     for (const path of ['xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml']) {
         const xml = await zip.file(path).async('string'), old = await original.file(path).async('string');
         assert.equal(xml.match(/<cols>[\s\S]*?<\/cols>/)[0], old.match(/<cols>[\s\S]*?<\/cols>/)[0]);
-        assert.doesNotMatch(xml, /40\+\(|#REF!|t="shared"|undefined/);
+        assert.doesNotMatch(xml, /#REF!|t="shared"|undefined/);
     }
     const roster = await zip.file('xl/worksheets/sheet1.xml').async('string');
     assert.match(roster, /ref="A1:G130"/);
@@ -247,14 +256,51 @@ test('XLSX retains template styles/widths/headers, dynamic rows and raw formulas
     assert.match(roster, /<c r="G4"[^>]* t="inlineStr"><is><t xml:space="preserve"><\/t><\/is><\/c>/);
     const xml = await zip.file('xl/worksheets/sheet2.xml').async('string');
     assert.match(xml, /ref="A1:K127"/);
-    assert.match(xml, /<c r="J3"[^>]*><f>[^<]*0\.25\*E3\+0\.30\*G3\+0\.45\*I3\)<\/f><v>76.25<\/v>/);
+    assert.match(xml, /<c r="J3"[^>]*><f>[^<]*0\.25\*E3\+0\.30\*G3\+0\.45\*I3\)<\/f><v>85.75<\/v>/);
     assert.match(xml, /<c r="F4"[^>]*\/>/);
     assert.match(xml, /<c r="D5"[^>]*><v>0<\/v>/);
-    assert.match(xml, /IF\(COUNT\(D5\)=0,&quot;&quot;,D5\)/);
+    assert.match(xml, /<c r="E5"[^>]*><f>IF\(D5=&quot;&quot;,&quot;&quot;,40\+\(D5\*0\.6\)\)<\/f><v>40<\/v>/);
     assert.match(xml, /'Name of Students'|&apos;Name of Students&apos;/);
     assert.match(xml, /B130/);
     assert.equal(zip.file('xl/calcChain.xml'), null);
     assert.doesNotMatch(await zip.file('xl/_rels/workbook.xml.rels').async('string'), /calcChain/);
     assert.doesNotMatch(await zip.file('xl/workbook.xml').async('string'), /absPath|USB Drive|Finalized Files/);
     assert.match(xml, /<c r="C3"[^>]*t="str"><f>[^<]*<\/f><v>000001<\/v>/);
+});
+
+test('mobile scans saved as six digits land on the roster row stored with the S prefix', () => {
+    const data = fixture(1);
+    data.students[0].studentId = 'S180047';
+    data.portalResults = [];
+    data.scanResults = [
+        { _id: 'digits', studentId: '180047', examId: 100, subject: 'Mathematics', score: 45, total: 50, uploadedByUid: user.uid, scannedAt: 1 },
+        { _id: 'prefixed', studentId: 's180047', examId: 101, subject: 'ESAS', score: 40, total: 50, uploadedByUid: user.uid, scannedAt: 2 }];
+    const { rows } = records.buildClassRecord(data);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]._id, 'student-0');
+    assert.deepEqual(rows[0].percentages, [90, 80, null]);
+    assert.equal(records.studentIdKey('S180047'), '180047');
+    assert.equal(records.studentIdKey('S1800'), 'S1800');
+});
+
+test('scans are fetched by uploader and matched to 63-bit mobile exam ids the web SDK rounds', async () => {
+    // 4611686018427387903 reads back in JS as 4611686018427388000: an examId query can never match.
+    const rounded = 4611686018427387903;
+    const chosen = selections.map((exam, index) => index ? exam : { ...exam, id: rounded });
+    const scans = [{ _id: 'big', examId: rounded, studentId: '000001', subject: 'Mathematics', score: 30, total: 50, uploadedByUid: user.uid },
+        { _id: 'other-exam', examId: 999, studentId: '000001', subject: 'Mathematics', score: 50, total: 50, uploadedByUid: user.uid }];
+    const reads = [];
+    const api = {
+        collection: (_, name) => ({ name }), where: (field, operator, value) => ({ field, operator, value }),
+        query: (collection, filter) => ({ ...collection, filter }),
+        getDocsFromServer: async request => {
+            reads.push(request);
+            const rows = request.name === 'scan_results' && request.filter?.field === 'uploadedByUid'
+                ? scans.filter(scan => scan.uploadedByUid === request.filter.value) : [];
+            return { docs: rows.map(row => ({ id: row._id, data: () => row })) };
+        }
+    };
+    const loaded = await records.loadClassRecordData({ db: {}, api, selections: chosen, user });
+    assert.deepEqual(loaded.scanResults.map(scan => scan._id), ['big']);
+    assert.equal(reads.some(read => read.name === 'scan_results' && read.filter.field === 'examId'), false);
 });
