@@ -16,10 +16,14 @@ export async function loadClassRecordData({ db, api, selections, user }) {
     // matched to the exam client-side, where both sides are rounded identically.
     const scanOwners = [...new Set(selections.map(scanOwnerUid).filter(Boolean))];
     const examKeys = new Set(selections.flatMap(exam => [key(exam._id), key(exam.id)]).filter(Boolean));
+    let fetchedScans = 0;
     for (const uid of scanOwners) {
         requests.push(getDocsFromServer(query(collection(db, "scan_results"), where("uploadedByUid", "==", uid)))
-            .then(snapshot => ({ name: "scan_results", docs: snapshot.docs.map(doc => ({ ...doc.data(), _id: doc.id }))
-                .filter(record => examKeys.has(key(record.examId))) })));
+            .then(snapshot => {
+                fetchedScans += snapshot.docs.length;
+                return { name: "scan_results", docs: snapshot.docs.map(doc => ({ ...doc.data(), _id: doc.id }))
+                    .filter(record => examKeys.has(key(record.examId))) };
+            }));
     }
     for (const name of ["examResults", "scan_results"]) {
         for (const exam of selections) {
@@ -45,7 +49,7 @@ export async function loadClassRecordData({ db, api, selections, user }) {
     return { students: students.docs.map(doc => ({ ...doc.data(), _id: doc.id })),
         ownerProfiles: owners.docs.map(doc => ({ uid: doc.id, email: doc.data().email || "" })),
         snapshots: snapshots.docs.map(doc => ({ ...doc.data(), _id: doc.id })),
-        portalResults: unique("examResults"), scanResults: unique("scan_results") };
+        portalResults: unique("examResults"), scanResults: unique("scan_results"), fetchedScans };
 }
 
 const key = value => value == null ? "" : String(value).trim();
@@ -145,7 +149,11 @@ export function buildClassRecord({ students = [], portalResults = [], scanResult
         }
         const sid = key(record.studentId);
         if (!sid) { warnings.add("Some results without a student identifier were excluded."); return null; }
-        const matches = byStudentId.get(studentIdKey(sid)) || [];
+        const all = byStudentId.get(studentIdKey(sid)) || [];
+        // A deleted student leaves an identity snapshot (and phone-side deletes a trashed row) behind;
+        // that must not make a re-added or current student ambiguous. Fall back to them only if none is active.
+        const current = all.filter(student => !student.rosterDeleted && student.deletedAt == null);
+        const matches = current.length ? current : all;
         if (matches.length > 1) { warnings.add(`Student ID ${sid} is duplicated in the roster; ambiguous scans were excluded.`); return null; }
         return matches[0] || normalizeStudent({ ...record, _id: `student:${sid}`, rosterDeleted: true });
     }

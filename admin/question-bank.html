@@ -211,11 +211,11 @@
 
                 <div class="form-group">
                     <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
-                        <input type="checkbox" id="upload-as-default" style="margin-top:3px;" />
+                        <input type="checkbox" id="upload-as-default" style="margin-top:3px;" checked disabled />
                         <span>
                             Shared default question bank
                             <small class="text-muted" style="display:block;font-weight:400;margin-top:3px;">
-                                Admin-only bank available read-only to every instructor.
+                                Questions an admin adds always go here: read-only for every instructor, web and mobile.
                             </small>
                         </span>
                     </label>
@@ -740,6 +740,31 @@
             return normalizeSubjectName(rowSubject) || suggestSubjectFromSheetName(sheetName) || selectedSubject;
         }
 
+        // Questions an admin added before admin questions became defaults were saved private to
+        // that admin, so teachers (and the mobile app) could not read them. Promote them once.
+        async function promoteAdminQuestionsToDefault(records) {
+            const stale = records.filter((q) => q.isDefault !== true && getQuestionOrigin(q) === "admin");
+            if (!stale.length) return;
+            const update = (q) => ({
+                isDefault: true,
+                questionOrigin: "default",
+                uploadedByUid: "",
+                uploadedByTeacherId: "",
+                uploaderEmail: null,
+                createdByUid: q.createdByUid || q.uploadedByUid || "",
+                promotedToDefaultAt: serverTimestamp()
+            });
+            for (let start = 0; start < stale.length; start += 450) {
+                const batch = writeBatch(db);
+                for (const q of stale.slice(start, start + 450)) batch.update(q._ref, update(q));
+                await batch.commit();
+            }
+            for (const q of stale) Object.assign(q, { isDefault: true, questionOrigin: "default", uploadedByUid: "", uploadedByTeacherId: "" });
+            showToast(`${stale.length} admin question${stale.length === 1 ? "" : "s"} moved to the shared default bank.`, "success");
+            await logActivity(user, "PROMOTE_ADMIN_QUESTIONS", `Moved ${stale.length} admin questions to the default bank`, {
+                entityType: "questionBank", operation: "UPDATE", count: stale.length });
+        }
+
         async function loadMasterQuestions() {
             ELEMENTS.masterTable.innerHTML = `<tr><td colspan="8" class="text-center py-24"><span class="spinner"></span></td></tr>`;
 
@@ -753,6 +778,7 @@
                         ...docRef.data()
                     }))
                     .filter(isQuestionRecord);
+                await promoteAdminQuestionsToDefault(normalized);
 
                 // Client-side dedupe by normalized question + subject
                 const seen = new Set();
@@ -963,10 +989,12 @@
                         sourceFileName: null
                     });
 
+                    // Admin questions join the shared default bank: every instructor (web and
+                    // mobile) can read them, and only an admin can edit or delete them.
                     const [createdQuestion] = await createQuestionsWithBankSequence({
                         bankId: bank.id,
                         subject: payload.subject,
-                        questionOrigin: "admin",
+                        questionOrigin: "default",
                         payloads: [{
                             ...payload,
                             itemType: "question",
@@ -974,12 +1002,19 @@
                             importSessionId: bank.id,
                             sourceFileName: payload.sessionName,
                             fileName: payload.sessionName,
-                            isDefault: false,
-                            uploadedByTeacherId: adminTeacherId,
-                            uploadedByUid: user.uid || "",
-                            uploaderEmail: user.email,
+                            isDefault: true,
+                            uploadedByTeacherId: "",
+                            uploadedByUid: "",
+                            uploaderEmail: null,
+                            createdByUid: user.uid || "",
+                            createdByEmail: user.email || "",
                             createdAt: serverTimestamp()
                         }]
+                    });
+                    await updateDoc(bank, {
+                        questionCount: increment(1),
+                        defaultQuestionCount: increment(1),
+                        lastUpdatedAt: serverTimestamp()
                     });
 
                     await logActivity(user, "CREATE_QUESTION", `Created question: ${payload.questionText.substring(0, 60)}`, {
@@ -1245,7 +1280,7 @@
         const openUploadModal = () => {
             document.getElementById("modal-upload").classList.remove("hidden");
             selectedFile = null;
-            document.getElementById("upload-as-default").checked = false;
+            document.getElementById("upload-as-default").checked = true;
             document.getElementById("selected-file-name").classList.add("hidden");
             document.getElementById("upload-submit").disabled = true;
             document.getElementById("upload-status").textContent = "";
@@ -1493,7 +1528,7 @@
             if (!selectedFile) return;
 
             const subject = document.getElementById("upload-subject").value;
-            const importAsDefault = document.getElementById("upload-as-default").checked;
+            const importAsDefault = true;   // admin uploads always join the shared default bank
             const sessionName = importAsDefault
                 ? "Default Question Bank"
                 : (document.getElementById("upload-session-name").value.trim() || selectedFile.name);

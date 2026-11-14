@@ -95,9 +95,3 @@ test('stored results capture each subject, transmuted grade, rating and remark f
     assert.equal(sheet.sameStoredResult(undefined, stored), false);
 });
 
-test('hide empty rows keeps only results rows that have at least one score', () => {
-    assert.equal(sheet.hasScores(undefined), false);
-    assert.equal(sheet.hasScores({ result: null }), false);
-    assert.equal(sheet.hasScores({ result: { percentages: [null, null, null] } }), false);
-    assert.equal(sheet.hasScores({ result: { percentages: [null, 0, null] } }), true);
-});

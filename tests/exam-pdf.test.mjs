@@ -37,6 +37,8 @@ test('A/B export includes every question in selected order across PDF pages', as
         assert.ok(result.text.replace(/\s/g, '').includes(INSTRUCTIONS.replace(/\s/g, '')));
         assert.ok(result.text.replace(/\s/g, '').includes(CLOSING_NOTICE.replace(/\s/g, '')));
         assert.ok(result.text.includes('Multiple Choice'));
+        assert.equal(result.text.split(`SET ${set}`).length - 1, 1);   // one title on the first page
+        assert.equal(result.text.includes(`SET ${set === 'A' ? 'B' : 'A'}`), false);
         assert.ok(result.text.includes('*** END ***'));
         assert.equal(/localhost|Title must stay off paper|123456|correctAnswer/.test(result.text), false);
         assert.match(result.operations, /14 Tf/);

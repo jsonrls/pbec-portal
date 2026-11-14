@@ -118,9 +118,6 @@ export function resultsLayout(sections, report) {
     return layout;
 }
 
-/** RESULTS row has at least one subject score (scanned, portal or typed) for the cluster. */
-export const hasScores = row => !!row?.result?.percentages?.some(value => value != null);
-
 function mostCommon(values) {
     const counts = new Map();
     for (const value of values.map(text).filter(Boolean)) counts.set(value, (counts.get(value) || 0) + 1);
@@ -246,7 +243,8 @@ export function mountStudentSheet({ mount, user, db, api, removeStudent, removeL
             const total = section.gender && section.gender !== "OTHER" ? slotCount(section.rows.length) : section.rows.length;
             for (let index = 0; index < total; index++) {
                 const row = section.rows[index];
-                if (hideEmpty && !hasScores(row)) { n++; hidden++; gap = true; continue; }
+                // Only blank slots (no student) hide; students without scores stay listed.
+                if (hideEmpty && !row) { n++; hidden++; gap = true; continue; }
                 const result = row?.result;
                 html += `<tr>${rn()}<td class="xl-green xl-num">${row ? index + 1 : ""}</td><td class="xl-green xl-left">${escapeHtml(row?.student.name || "")}</td>` +
                     `<td class="xl-green">${escapeHtml(row?.student.studentId || "")}</td>`;
@@ -504,7 +502,14 @@ export function mountStudentSheet({ mount, user, db, api, removeStudent, removeL
             if (clusterId !== key(cluster.id)) return;
             selections = chosen; recordData = data;
             exportButton.disabled = false;
-            setStatus(`Scores for ${cluster.name}. ${report()?.warnings.join(" ") || ""}`.trim());
+            const forCluster = data.scanResults.filter(scan => scan.deletedAt == null && key(scan.clusterId) === key(cluster.id));
+            const outside = data.scanResults.filter(scan => scan.deletedAt == null).length - forCluster.length;
+            const built = report();
+            const scanNote = forCluster.length
+                ? ` ${forCluster.length} scan${forCluster.length === 1 ? "" : "s"} in this cluster, ${built?.rows.length || 0} student${built?.rows.length === 1 ? "" : "s"} with scores.`
+                : data.fetchedScans === 0 ? " No scans have been uploaded from the phone for this cluster's exams yet."
+                : ` No scans in this cluster.${outside ? ` ${outside} scan${outside === 1 ? " was" : "s were"} saved without this cluster.` : ""}`;
+            setStatus(`Scores for ${cluster.name}.${scanNote} ${built?.warnings.join(" ") || ""}`.trim());
         } catch (error) {
             setStatus(`Could not load scores: ${error.message}`, true);
         } finally {
@@ -643,7 +648,7 @@ export function mountStudentSheet({ mount, user, db, api, removeStudent, removeL
         try { localStorage.setItem(HIDE_KEY, hideEmpty ? "1" : "0"); } catch { /* storage blocked */ }
         render();
         if (tab === "results" && !statusLine.classList.contains("xl-error")) {
-            setStatus(hideEmpty ? `${hidden} row${hidden === 1 ? "" : "s"} without scores hidden.` : "Showing all rows.");
+            setStatus(hideEmpty ? `${hidden} empty row${hidden === 1 ? "" : "s"} hidden.` : "Showing all rows.");
         }
     }));
     clusterSelect.addEventListener("change", () => { clusterId = clusterSelect.value; watchClusterScans(); loadResults(); });

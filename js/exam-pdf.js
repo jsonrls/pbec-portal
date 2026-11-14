@@ -260,6 +260,9 @@ export async function createExamPdf({ exam, questions, set = "A", subject = exam
     }
     const heading = wrap(await runs(header, bold, 14), contentWidth);
     for (const line of heading) { drawLine(line, margin + (contentWidth - line.width) / 2, y); y -= line.height; }
+    // The set the student must shade in the TEST SET box on the answer sheet.
+    const setLabel = `SET ${String(set).toUpperCase()}`;
+    for (const line of wrap(await runs(setLabel, bold, 14), contentWidth)) { drawLine(line, margin + (contentWidth - line.width) / 2, y); y -= line.height; }
     y -= 5;
     const divider = () => { page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: .8, color: rgb(0, 0, 0) }); y -= 5; };
     divider();

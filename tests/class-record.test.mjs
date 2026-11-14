@@ -304,3 +304,17 @@ test('scans are fetched by uploader and matched to 63-bit mobile exam ids the we
     assert.deepEqual(loaded.scanResults.map(scan => scan._id), ['big']);
     assert.equal(reads.some(read => read.name === 'scan_results' && read.filter.field === 'examId'), false);
 });
+
+test('a deleted student with the same ID does not make the current student ambiguous', () => {
+    const data = fixture(1);
+    data.students[0].studentId = 'S180047';
+    data.portalResults = [];
+    data.snapshots = [{ recordType: 'rosterSnapshot', studentDocId: 'old-doc', studentSnapshot: { name: 'Old Reales', studentId: 'S180047' } }];
+    data.students.push({ _id: 'trashed', name: 'Trashed Reales', studentId: 'S180047', deletedAt: 5 });
+    data.scanResults = [{ _id: 'scan', studentId: '180047', examId: 100, subject: 'Mathematics', score: 0, total: 100, uploadedByUid: user.uid, scannedAt: 1 }];
+    const { rows, warnings } = records.buildClassRecord(data);
+    assert.deepEqual(warnings, []);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]._id, 'student-0');
+    assert.equal(rows[0].percentages[0], 0);
+});
