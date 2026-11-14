@@ -100,6 +100,12 @@ export function buildExamPayload({ examName, subject, setA, setB, bankIds, user,
     if (!user.uid) throw new Error("Sign in before generating an exam.");
     const generatedId = id ?? now * 1024 + globalThis.crypto.getRandomValues(new Uint32Array(1))[0] % 1024;
     if (!Number.isSafeInteger(generatedId) || generatedId <= 0) throw new Error("Invalid numeric exam ID.");
+    // A question without an A–D key can never be scored, so it must not reach a saved exam.
+    const unkeyed = [...setA, ...setB].find(question => !hasAnswerKey(question));
+    if (unkeyed) {
+        throw new Error(`${unkeyed.subject || subject} question ${unkeyed.questionNumber ?? questionId(unkeyed)} has no A, B, C or D answer key. ` +
+            "Fix it in the Question Bank, then generate again.");
+    }
     const a = setA.map(questionReference), b = setB.map(questionReference);
     const payload = {
         id: generatedId, examName, subject, setAQuestionIds: a, setBQuestionIds: b, questionIds: a,
@@ -112,4 +118,28 @@ export function buildExamPayload({ examName, subject, setA, setB, bankIds, user,
     resolveExamQuestions(payload, pool, "A");
     resolveExamQuestions(payload, pool, "B");
     return payload;
+}
+
+const ANSWER_LETTER = /^(?:(?:OPTION|CHOICE|LETTER|ANSWER|ANS|KEY)\s*[:.\-]?\s*)?\(?([A-D])\)?[.:\-]?(?:\s.*)?$/s;
+
+/**
+ * Reads an answer key as A–D. Spreadsheets and older imports store it as "a", "A.", "(B)",
+ * "Option C", "Answer: D", 1–4, or the option's own text; all mean the same letter.
+ * Returns null when the value names no option. Must match ExamData.normalizeAnswer on mobile.
+ */
+export function normalizeAnswerKey(raw, options = []) {
+    const value = String(raw ?? "").trim();
+    if (!value) return null;
+    const byText = options.slice(0, 4).findIndex(option =>
+        String(option ?? "").trim() && String(option).trim().toLowerCase() === value.toLowerCase());
+    if (byText >= 0) return "ABCD"[byText];
+    const letter = value.toUpperCase().match(ANSWER_LETTER);
+    if (letter) return letter[1];
+    return /^[1-4]$/.test(value) ? "ABCD"[Number(value) - 1] : null;
+}
+
+/** True when the question's stored key reads as one of the four answer-sheet bubbles. */
+export function hasAnswerKey(question) {
+    return normalizeAnswerKey(question?.correctAnswer,
+        [question?.optionA, question?.optionB, question?.optionC, question?.optionD]) !== null;
 }

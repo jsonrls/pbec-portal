@@ -243,6 +243,7 @@
         import { renderSidebar } from "../js/sidebar.js";
         import { initSidebar, showToast, showConfirm, setButtonLoading } from "../js/ui.js";
         import { logActivity } from "../js/audit.js";
+        import { normalizeAnswerKey } from "../js/exam-data.js";
         import { db } from "../js/firebase-config.js";
         import {
             collection, getDocs, deleteDoc, doc,
@@ -569,7 +570,10 @@
             document.getElementById("question-option-b").value = question?.optionB || "";
             document.getElementById("question-option-c").value = question?.optionC || "";
             document.getElementById("question-option-d").value = question?.optionD || "";
-            document.getElementById("question-answer").value = question?.correctAnswer || "A";
+            // Unreadable stored keys show blank so saving forces a real choice instead of silently using A.
+            document.getElementById("question-answer").value = question
+                ? normalizeAnswerKey(question.correctAnswer, [question.optionA, question.optionB, question.optionC, question.optionD]) || ""
+                : "A";
             document.getElementById("question-category").value = question?.category || "Objective";
             document.getElementById("question-topic").value = question?.topic || "";
             document.getElementById("modal-question").classList.remove("hidden");
@@ -594,6 +598,10 @@
             };
             if (!payload.questionText || !payload.optionA || !payload.optionB || !payload.optionC || !payload.optionD) {
                 showToast("Question text and all four options are required.", "warning");
+                return;
+            }
+            if (!["A", "B", "C", "D"].includes(payload.correctAnswer)) {
+                showToast("Choose the correct answer (A–D).", "warning");
                 return;
             }
 
@@ -793,6 +801,7 @@
 
             const detectedSubjects = new Set();
             const questions = [];
+            let invalidAnswerRows = 0;
             const rows = json.slice(1).filter((row) =>
                 Array.isArray(row) && row.some((cell) => String(cell ?? "").trim() !== "")
             );
@@ -800,8 +809,9 @@
             rows.forEach((row, index) => {
                 const questionText = String(row[colMapping["question text"]] || "").trim();
                 if (!questionText) return;
-                const correctAnswer = String(row[colMapping["correct answer"]] || "").trim().toUpperCase();
-                if (!correctAnswer) return;
+                // Store only A–D: the scanner cannot grade any other key.
+                const correctAnswer = normalizeAnswerKey(row[colMapping["correct answer"]], ["option a", "option b", "option c", "option d"].map((column) => row[colMapping[column]]));
+                if (!correctAnswer) { invalidAnswerRows++; return; }
 
                 const rowSubject = colMapping.subject !== undefined
                     ? String(row[colMapping.subject] || "").trim()
@@ -851,6 +861,7 @@
                     sheetName,
                     detectedSubjects: [...detectedSubjects],
                     parsedQuestionCount: questions.length,
+                    invalidAnswerRows,
                     skippedReason: questions.length ? null : "No valid question rows"
                 }
             };
@@ -1017,7 +1028,9 @@
                         }
 
                         progressFill.style.width = "100%";
-                        const sheetSummary = `${validSheetCount} sheets${skippedSheetCount ? `, ${skippedSheetCount} skipped` : ""}`;
+                        const badAnswerRows = sheetResults.reduce((sum, result) => sum + (result.metadata.invalidAnswerRows || 0), 0);
+                        const sheetSummary = `${validSheetCount} sheets${skippedSheetCount ? `, ${skippedSheetCount} skipped` : ""}` +
+                            (badAnswerRows ? `, ${badAnswerRows} row${badAnswerRows === 1 ? "" : "s"} skipped: correct answer is not A–D` : "");
                         statusEl.textContent = `✅ Processed ${importedBankCount} subject banks from ${sheetSummary}: ${totalUpdated} updated, ${totalCreated} added.`;
                         
                         // Log activity

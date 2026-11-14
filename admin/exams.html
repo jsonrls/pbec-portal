@@ -173,7 +173,7 @@
         import { renderSidebar } from "../js/sidebar.js";
         import { initSidebar, showToast, showConfirm, setButtonLoading, formatDateTime } from "../js/ui.js";
         import { logActivity } from "../js/audit.js";
-        import { timestampMillis, examSubject, buildExamPayload } from "../js/exam-data.js";
+        import { timestampMillis, examSubject, buildExamPayload, hasAnswerKey } from "../js/exam-data.js";
         import { lucideIcon } from "../js/lucide-icons.js";
         import { db } from "../js/firebase-config.js";
         import {
@@ -359,7 +359,13 @@
                         .filter(q => q.subject === subject && (q.isDefault === true || q.uploadedByUid === user.uid)));
                 }
 
-                if (!pool.length) throw new Error("No questions found in selected sessions.");
+                // Questions without an A–D key cannot be scored; leave them out of every new exam.
+                const keyed = pool.filter(hasAnswerKey);
+                const unkeyedCount = pool.length - keyed.length;
+                pool = keyed;
+                if (!pool.length) throw new Error(unkeyedCount
+                    ? "None of the questions in the selected sessions has an A–D answer key. Fix them in the Question Bank."
+                    : "No questions found in selected sessions.");
 
                 const shuffled = shuffle ? [...pool].sort(() => Math.random() - 0.5) : pool;
                 const setA = shuffled.slice(0, Math.min(count, shuffled.length));
@@ -371,7 +377,8 @@
                 activeSubject = subject;
                 document.querySelectorAll(".chip[data-subject]").forEach(chip => chip.classList.toggle("active", chip.dataset.subject === subject));
                 renderExams();
-                showToast(`Exam "${name}" generated with ${setA.length} questions!`, "success");
+                showToast(`Exam "${name}" generated with ${setA.length} questions!` +
+                    (unkeyedCount ? ` ${unkeyedCount} question${unkeyedCount === 1 ? "" : "s"} without an answer key left out.` : ""), "success");
                 document.getElementById("modal-generate").classList.add("hidden");
                 void logActivity(user, "GENERATE_EXAM", `Generated exam: ${name}`, { id: docRef.id, subject, examName: name })
                     .catch(error => console.warn("Exam saved; audit logging failed", { code: error.code }));

@@ -2,13 +2,28 @@ import { normalizeStudent, studentSnapshot } from "./student-actions.js";
 import { isExamOwner, examSubject } from "./exam-data.js";
 
 export const RECORD_SUBJECTS = ["Mathematics", "ESAS", "Professional EE"];
+// Record template grading: transmuted = 40 + raw × 0.6; rating weights the transmuted grades.
+const round = value => Math.round(value * 1e6) / 1e6;
+export const transmute = value => value == null ? null : round(40 + value * 0.6);
 export const ATTEMPT_POLICY = "Highest valid percentage across scans and portal Set A/B; ties use newest time, then source and document ID. Missing subjects stay blank.";
 
 export async function loadClassRecordData({ db, api, selections, user }) {
     const { collection, query, where, getDocsFromServer } = api;
     const requests = [];
+    // Mobile exam/cluster ids are random 63-bit integers. The web SDK reads them as rounded
+    // doubles, so `where("examId", "in", [exam.id])` can never equal the stored integer. Scans are
+    // therefore fetched by their uploader (the exam owner — matchesExam rejects anyone else) and
+    // matched to the exam client-side, where both sides are rounded identically.
+    const scanOwners = [...new Set(selections.map(scanOwnerUid).filter(Boolean))];
+    const examKeys = new Set(selections.flatMap(exam => [key(exam._id), key(exam.id)]).filter(Boolean));
+    for (const uid of scanOwners) {
+        requests.push(getDocsFromServer(query(collection(db, "scan_results"), where("uploadedByUid", "==", uid)))
+            .then(snapshot => ({ name: "scan_results", docs: snapshot.docs.map(doc => ({ ...doc.data(), _id: doc.id }))
+                .filter(record => examKeys.has(key(record.examId))) })));
+    }
     for (const name of ["examResults", "scan_results"]) {
         for (const exam of selections) {
+            if (name === "scan_results" && scanOwnerUid(exam)) continue;   // covered above
             const ids = new Set([String(exam._id)]);
             if (exam.id != null && String(exam.id).trim()) {
                 ids.add(String(exam.id));
@@ -34,6 +49,9 @@ export async function loadClassRecordData({ db, api, selections, user }) {
 }
 
 const key = value => value == null ? "" : String(value).trim();
+export const scanOwnerUid = exam => key(exam.uploadedByUid || exam.createdByUid);
+// The scanner reads six digits ("231013"); the roster stores "S231013". Match either form.
+export const studentIdKey = value => key(value).replace(/^s(?=\d{6}$)/i, "");
 const ownerFields = ["createdByUid", "uploadedByUid", "createdBy", "createdByEmail", "uploadedByTeacherId", "uploaderEmail", "teacherEmail", "teacherId", "ownerUid"];
 export const ownerKeys = record => ownerFields.map(field => key(record[field])).filter(Boolean);
 export function canReadExam(exam, user) {
@@ -112,9 +130,9 @@ export function buildClassRecord({ students = [], portalResults = [], scanResult
     const byStudentId = new Map();
     for (const student of identities.values()) {
         if (!student.studentId) continue;
-        const matches = byStudentId.get(student.studentId) || [];
+        const matches = byStudentId.get(studentIdKey(student.studentId)) || [];
         matches.push(student);
-        byStudentId.set(student.studentId, matches);
+        byStudentId.set(studentIdKey(student.studentId), matches);
     }
     const rows = new Map();
     const warnings = new Set();
@@ -127,7 +145,7 @@ export function buildClassRecord({ students = [], portalResults = [], scanResult
         }
         const sid = key(record.studentId);
         if (!sid) { warnings.add("Some results without a student identifier were excluded."); return null; }
-        const matches = byStudentId.get(sid) || [];
+        const matches = byStudentId.get(studentIdKey(sid)) || [];
         if (matches.length > 1) { warnings.add(`Student ID ${sid} is duplicated in the roster; ambiguous scans were excluded.`); return null; }
         return matches[0] || normalizeStudent({ ...record, _id: `student:${sid}`, rosterDeleted: true });
     }
@@ -151,11 +169,28 @@ export function buildClassRecord({ students = [], portalResults = [], scanResult
             }
         }
     });
+    // Manual scores typed on the Students RESULTS sheet, stored per cluster on the roster document.
+    const clusterKey = key(clusterId);
+    if (clusterKey) for (const student of students) {
+        const overrides = student.scoreOverrides?.[clusterKey];
+        if (!overrides || typeof overrides !== "object") continue;
+        const rowKey = key(student._id);
+        RECORD_SUBJECTS.forEach((subject, index) => {
+            const value = percentage(overrides[subject]);
+            if (value === null) return;
+            if (!rows.has(rowKey)) rows.set(rowKey, { ...studentSnapshot(student), _id: rowKey,
+                rosterDeleted: false, isArchived: !!student.isArchived, subjects: [null, null, null] });
+            const scanned = rows.get(rowKey).subjects[index];
+            rows.get(rowKey).subjects[index] = { percentage: value, source: "override", id: `override:${rowKey}`,
+                time: 0, scanned: scanned?.percentage ?? null };
+        });
+    }
     const output = [...rows.values()].map(row => {
         const percentages = row.subjects.map(attempt => attempt?.percentage ?? null);
+        const transmuted = percentages.map(transmute);
         const complete = percentages.every(value => value !== null);
-        const rating = complete ? percentages[0] * .25 + percentages[1] * .30 + percentages[2] * .45 : null;
-        return { ...row, percentages, rating, remark: complete ? (rating >= 70 && percentages.every(value => value >= 50) ? "PASSED" : "FAILED") : "INCOMPLETE" };
+        const rating = complete ? round(transmuted[0] * .25 + transmuted[1] * .30 + transmuted[2] * .45) : null;
+        return { ...row, percentages, transmuted, rating, remark: complete ? (rating >= 70 && percentages.every(value => value >= 50) ? "PASSED" : "FAILED") : "INCOMPLETE" };
     }).sort((a, b) => a.name.localeCompare(b.name) || a.studentId.localeCompare(b.studentId) || a._id.localeCompare(b._id));
     return { rows: output, warnings: [...warnings] };
 }
@@ -216,7 +251,7 @@ export async function createClassWorkbook({ template, rows, selections, clusterN
             [index + 1, row.name, String(row.studentId)].map((value, i) => cell(`${"ABC"[i]}${r}`, resultStyle["ABC"[i]], value, `'Name of Students'!${"ABC"[i]}${rr}`)).join("");
         row.percentages.forEach((value, i) => {
             const raw = "DFH"[i], pct = "EGI"[i];
-            resultRows += cell(`${raw}${r}`, resultStyle[raw], value) + cell(`${pct}${r}`, resultStyle[pct], value, `IF(COUNT(${raw}${r})=0,"",${raw}${r})`);
+            resultRows += cell(`${raw}${r}`, resultStyle[raw], value) + cell(`${pct}${r}`, resultStyle[pct], row.transmuted[i], `IF(${raw}${r}="","",40+(${raw}${r}*0.6))`);
         });
         resultRows += cell(`J${r}`, resultStyle.J, row.rating, `IF(COUNT(E${r},G${r},I${r})<3,"",0.25*E${r}+0.30*G${r}+0.45*I${r})`) +
             cell(`K${r}`, resultStyle.K, row.remark, `IF(COUNT(D${r},F${r},H${r})<3,"INCOMPLETE",IF(AND(J${r}>=70,MIN(D${r},F${r},H${r})>=50),"PASSED","FAILED"))`) + "</row>";
@@ -251,7 +286,7 @@ export async function mountClassRecord({ mount, exportButton, user, loadExams, l
         ${RECORD_SUBJECTS.map((subject, index) => `<div class="form-group"><label for="record-exam-${index}">${subject}</label><select class="form-control" id="record-exam-${index}" disabled><option value="">Loading exams…</option></select></div>`).join("")}
         <div class="form-group"><label for="record-group">Record group</label><select class="form-control" id="record-group" disabled><option value="">Choose three exams first</option></select></div></div>
         <div class="form-group" style="max-width:320px;"><label for="record-school-year">School year (optional)</label><input class="form-control" id="record-school-year" placeholder="Enter the school year" /></div>
-        <p class="text-sm">Raw percentages: Mathematics 25%, ESAS 30%, Professional EE 45%. Pass: overall at least 70, each subject at least 50, all subjects present.</p>
+        <p class="text-sm">Each raw percentage is transmuted to 40 + raw × 0.6; the rating weights transmuted Mathematics 25%, ESAS 30%, Professional EE 45%. Pass: rating at least 70, each raw score at least 50, all subjects present.</p>
         <p class="text-sm">${ATTEMPT_POLICY} Export includes students with a result for the selected exams and record group, including archived and deleted students. Groups are kept separate; unclustered portal grades are included only in Unclustered records.</p>
         <p id="record-status" role="status" aria-live="polite" class="text-sm">Loading available exams…</p>
         <button type="button" id="record-retry" class="btn btn-secondary hidden">Retry loading exams</button>

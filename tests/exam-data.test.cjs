@@ -10,8 +10,8 @@ const context = vm.createContext({ console, Date, Uint32Array, crypto: require('
 vm.runInContext(helper, context);
 const plain = value => JSON.parse(JSON.stringify(value));
 const pool = [
-    { _id: 'doc-a', _bankId: 'bank', id: 41, subject: 'Mathematics', questionText: 'A' },
-    { _id: 'doc-b', _bankId: 'bank', id: 72, subject: 'Mathematics', questionText: 'B' }
+    { _id: 'doc-a', _bankId: 'bank', id: 41, subject: 'Mathematics', questionText: 'A', correctAnswer: 'A' },
+    { _id: 'doc-b', _bankId: 'bank', id: 72, subject: 'Mathematics', questionText: 'B', correctAnswer: 'c.' }
 ];
 test('legacy doc refs and numeric sets preserve exact A/B order and repeated entries', () => {
     for (const sets of [ { setAQuestionIds: ['doc-b', 'doc-a', 'doc-b'], setBQuestionIds: ['doc-a', 'doc-b'] },
@@ -154,3 +154,24 @@ for (const role of ['admin', 'teacher']) {
         assert.equal(p.notices.at(-1)[1], 'success');
     });
 }
+
+test('answer keys in common spreadsheet forms resolve to the same letter the mobile scanner uses', () => {
+    const options = ['10 ohms', '20 ohms', 'A resistor', '40 ohms'];
+    for (const [raw, expected] of [['a', 'A'], [' B ', 'B'], ['C.', 'C'], ['(D)', 'D'], ['B)', 'B'],
+        ['Option C', 'C'], ['ANSWER: D', 'D'], ['ans. a', 'A'], ['A. 10 ohms', 'A'], ['2', 'B'],
+        ['20 Ohms', 'B'], ['a resistor', 'C'], [3, 'C']]) {
+        assert.equal(context.normalizeAnswerKey(raw, options), expected, String(raw));
+    }
+    for (const raw of [null, undefined, '', ' ', 'E', 'AB', 'ADD', '5', '0', 'none']) {
+        assert.equal(context.normalizeAnswerKey(raw, options), null, String(raw));
+    }
+});
+
+test('generation never saves an exam containing a question without an A-D answer key', () => {
+    const blank = { ...pool[1], correctAnswer: '', questionNumber: 791, subject: 'ESAS' };
+    assert.equal(context.hasAnswerKey(pool[1]), true);
+    assert.equal(context.hasAnswerKey(blank), false);
+    assert.throws(() => context.buildExamPayload({ examName: 'Exam', subject: 'Mathematics', setA: [pool[0], blank],
+        setB: [blank, pool[0]], bankIds: ['bank'], user: { uid: 'me' }, id: 101 }),
+        /ESAS question 791 has no A, B, C or D answer key/);
+});

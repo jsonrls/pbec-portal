@@ -92,12 +92,15 @@ const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css
         await page.route('**/js/firebase-config.js', route => route.fulfill(js('export const db = {};')));
         await page.route('**/js/audit.js', route => route.fulfill(js('export async function logActivity() {}')));
         await page.route('**/firebase-firestore.js', route => route.fulfill(js(`
-            const rows = [{_id:'numeric',name:'Numeric Student',studentId:123,yearLevel:'4th Year'}, {_id:'named',name:'Name Search',studentId:'0007'}];
+            const rows = [{_id:'numeric',name:'Numeric Student',studentId:123,yearLevel:'4th Year',gender:'MALE'}, {_id:'named',name:'Name Search',studentId:'0007',gender:'MALE'}];
             const listeners=[]; window.teacherFixture={writes:[]};
             const snap=()=>({docs:rows.map(row=>({id:row._id,data:()=>({...row})}))});
             export function collection(_,name){return name;}
             export function doc(_,collection,id){return {collection,id};}
             export function query(...args){return args;}
+            export function where(...args){return args;}
+            export function deleteField(){return null;}
+            export async function getDocsFromServer(){return snap();}
             export function serverTimestamp(){return 1000;}
             export function onSnapshot(q,cb){listeners.push(cb);queueMicrotask(()=>cb(snap()));return ()=>{};}
             export async function updateDoc(ref,data){Object.assign(rows.find(row=>row._id===ref.id),data);window.teacherFixture.writes.push({ref,data});listeners.forEach(cb=>cb(snap()));}
@@ -107,28 +110,38 @@ const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css
         `)));
         await page.route('https://cdn.sheetjs.com/**', route => route.fulfill(js('')));
         await page.goto(url.replace('/tests/class-record-browser.html', '/teacher/students.html'));
-        await page.locator('#search-input').fill('Name Search');
-        await page.waitForFunction(() => document.querySelector('#student-count').textContent === '1 student');
-        assert.match(await page.locator('#students-tbody').textContent(), /Name Search/);
-        await page.locator('#search-input').fill('123');
-        await page.waitForFunction(() => document.querySelector('#students-tbody').textContent.includes('Numeric Student'));
-        assert.equal(await page.locator('#students-tbody tr').count(), 1);
-        await page.locator('button[data-action="archive"]').click();
+        // Spreadsheet roster: removing a student always goes through the confirmation dialog.
+        const removeNumeric = page.locator('button[data-act="remove"][data-id="numeric"]');
+        await removeNumeric.waitFor();
+        await removeNumeric.click();
+        assert.match(await page.locator('#student-action-description').textContent(), /Numeric Student.*123/);
         await page.getByRole('button', {name:'Cancel',exact:true}).click();
-        await page.waitForFunction(() => !document.querySelector('button[data-action="archive"]').disabled);
+        await page.waitForFunction(() => !document.querySelector('button[data-act="remove"][data-id="numeric"]').disabled);
         assert.equal(await page.evaluate(() => window.teacherFixture.writes.length), 0);
-        await page.locator('button[data-action="archive"]').click();
+        await removeNumeric.click();
+        await page.keyboard.press('Escape');
+        await page.waitForFunction(() => !document.querySelector('dialog'));
+        assert.equal(await page.evaluate(() => window.teacherFixture.writes.length), 0);
+        await removeNumeric.click();
         await page.getByRole('button', {name:'Archive student',exact:true}).click();
         await page.waitForFunction(() => window.teacherFixture.writes.length === 1);
-        await page.waitForFunction(() => document.querySelector('#student-count').textContent === '0 students');
         assert.equal(await page.evaluate(() => window.teacherFixture.writes[0].data.isArchived), true);
-        await page.locator('#search-input').fill('Name Search');
-        await page.waitForFunction(() => document.querySelector('#student-count').textContent === '1 student');
-        assert.equal(await page.locator('button[data-action="archive"]').isEnabled(), true);
+        await page.waitForFunction(() => !document.querySelector('button[data-act="remove"][data-id="numeric"]'));
+        assert.equal(await page.locator('button[data-act="remove"][data-id="named"]').isEnabled(), true);
+        // Hide empty rows: blank slots collapse to one entry row, and the row header marks the gap.
+        const rosterRows = await page.locator('.xl-grid tbody tr').count();
+        await page.locator('[data-sheet="roster"] [data-act="toggle-empty"]').click();
+        assert.ok(await page.locator('.xl-grid tbody tr').count() < rosterRows - 40);
+        assert.equal(await page.locator('[data-sheet="roster"] [data-act="toggle-empty"]').textContent(), 'Show all rows');
+        assert.match(await page.locator('.xl-status').textContent(), /empty rows? hidden/);
+        assert.ok(await page.locator('.xl-rn.xl-gap').count() >= 1);
+        assert.equal(await page.locator('input[data-pos="MALE|1|name"]').count(), 1);   // the one blank entry row stays
+        await page.locator('[data-sheet="roster"] [data-act="toggle-empty"]').click();
+        assert.equal(await page.locator('.xl-grid tbody tr').count(), rosterRows);
         await page.screenshot({ path: path.join(output, 'teacher-search-archive.png'), fullPage: true });
         assert.deepEqual(errors, []);
         await fs.writeFile(path.join(output, 'checks.json'), JSON.stringify({ status: 'passed',
-            checks: ['UID precedence', 'escaped name/ID', 'Cancel', 'Escape', 'confirm', 'explicit exams and group', 'unclustered export', 'cluster export', 'export error recovery', 'empty group', 'mobile export visible', 'mobile no overflow', 'settled opaque dialog', 'actual teacher page name search', 'actual teacher page numeric ID search', 'archive cancel releases pending state', 'archive confirm with active search'],
+            checks: ['UID precedence', 'escaped name/ID', 'Cancel', 'Escape', 'confirm', 'explicit exams and group', 'unclustered export', 'cluster export', 'export error recovery', 'empty group', 'mobile export visible', 'mobile no overflow', 'settled opaque dialog', 'teacher sheet remove: Cancel', 'teacher sheet remove: Escape', 'teacher sheet remove: confirm archives', 'hide empty rows toggle'],
             pageErrors: errors }, null, 2));
         console.log(`PASS: browser fixtures; screenshots, workbooks and checks.json in ${output}`);
     } finally {
